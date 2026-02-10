@@ -68,6 +68,3 @@ python -m src.infrastructure.rocm_check
 - [ ] **Fase 4**: Escala (vmap multi-agente, FAISS, HyperNEAT, Baldwin)
 - [ ] **Fase 5**: Otimização (Lyapunov, Transfer Entropy, visualizador)
 
-## 📄 Licença
-
-MIT

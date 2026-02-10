@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 Projeto Fauna — Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🧬 Projeto Fauna</h1>
+                <span class="subtitle">Simulação de Evolução Neuro-Líquida</span>
+            </div>
+            <div class="header-right">
+                <div class="status-badge" id="status-badge">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Conectando...</span>
+                </div>
+                <div class="timer" id="timer">00:00</div>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- World View -->
+            <div class="panel world-panel">
+                <div class="panel-header">
+                    <h2>🌍 Mundo</h2>
+                    <div class="panel-controls">
+                        <label class="toggle">
+                            <input type="checkbox" id="show-food" checked>
+                            <span>Comida</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" id="show-trails">
+                            <span>Trilhas</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="world-canvas"></canvas>
+                </div>
+                <div class="world-legend">
+                    <span class="legend-item"><span class="dot dot-high"></span> Alta energia</span>
+                    <span class="legend-item"><span class="dot dot-mid"></span> Média</span>
+                    <span class="legend-item"><span class="dot dot-low"></span> Baixa</span>
+                    <span class="legend-item"><span class="dot dot-food"></span> Comida</span>
+                </div>
+            </div>
+
+            <!-- Stats Panel -->
+            <div class="panel stats-panel">
+                <div class="panel-header">
+                    <h2>📊 Status</h2>
+                    <span class="step-counter" id="step-counter">Step 0</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🧬</div>
+                        <div class="stat-value" id="stat-alive">0</div>
+                        <div class="stat-label">Agentes Vivos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-value" id="stat-energy">0</div>
+                        <div class="stat-label">Energia Média</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-value" id="stat-age">0</div>
+                        <div class="stat-label">Idade Média</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🍃</div>
+                        <div class="stat-value" id="stat-food">0</div>
+                        <div class="stat-label">Comida Total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔄</div>
+                        <div class="stat-value" id="stat-generation">0</div>
+                        <div class="stat-label">Geração</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-value" id="stat-fitness">—</div>
+                        <div class="stat-label">Max Fitness</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Population Chart -->
+            <div class="panel chart-panel">
+                <div class="panel-header">
+                    <h2>📈 População</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="population-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Energy Chart -->
+            <div class="panel chart-panel">
+                <div class="panel-header">
+                    <h2>⚡ Energia</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="energy-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Fitness Chart -->
+            <div class="panel chart-panel wide">
+                <div class="panel-header">
+                    <h2>🏆 Fitness por Geração</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="fitness-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="panel log-panel">
+                <div class="panel-header">
+                    <h2>📋 Atividade</h2>
+                    <button class="btn-clear" id="clear-log">Limpar</button>
+                </div>
+                <div class="log-container" id="log-container">
+                    <div class="log-entry info">Aguardando simulação...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
