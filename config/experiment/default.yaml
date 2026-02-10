@@ -1,0 +1,27 @@
+# Hiperparâmetros padrão do experimento
+agent:
+  hidden_dim: 64
+  action_dim: 8
+  num_sensory: 32
+  num_inter_neurons: 48
+  num_command_neurons: 16
+  sensor_range: 10.0
+
+training:
+  algorithm: "ppo"
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  num_epochs: 4
+  num_minibatches: 8
+  max_grad_norm: 0.5
+
+population:
+  num_agents: 1000
+  max_agents: 10000
+
+environment:
+  num_steps: 1000
+  physics_dt: 0.02
+  episode_length: 1000

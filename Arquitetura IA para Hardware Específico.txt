@@ -1,0 +1,378 @@
+﻿Relatório de Arquitetura Técnica: Projeto Fauna – Simulação de Agentes Autônomos em Hardware de Consumo
+1. Introdução e Visão Geral do Projeto
+A engenharia de software voltada para Inteligência Artificial (IA) encontra-se em um ponto de inflexão. Enquanto a indústria macro converge para o treinamento de Grandes Modelos de Linguagem (LLMs) em clusters massivos de GPUs H100, existe uma contracorrente vital focada na eficiência, na bio-inspiração e na execução de sistemas complexos em hardware acessível. O "Projeto Fauna" insere-se neste segundo paradigma. O objetivo não é processar petabytes de texto estático, mas sim simular a dinâmica temporal, evolutiva e comportamental de agentes autônomos em um ambiente contínuo.
+Este documento detalha a arquitetura técnica exaustiva para o Projeto Fauna, desenhada especificamente para operar dentro das restrições e oportunidades de um hardware de classe consumidora: um processador AMD Ryzen 5 5600, 16GB de memória RAM DDR4 e uma GPU AMD Radeon RX 6750 XT com 12GB de VRAM. A escolha deste hardware, embora modesta comparada a servidores de datacenter, oferece um poder computacional FP32 (ponto flutuante de precisão simples) surpreendente, desde que a stack de software seja meticulosamente otimizada para a arquitetura RDNA2.
+A premissa central desta arquitetura é a substituição da força bruta pela elegância matemática e estrutural. Utilizaremos o framework JAX sobre a plataforma ROCm (Radeon Open Compute) para fundir operações físicas e cognitivas em kernels únicos de GPU, minimizando a latência de transferência de dados via PCIe. A cognição dos agentes será baseada em Redes Neurais Líquidas (LNNs) e modelos de Tempo Contínuo de Forma Fechada (CfC), que oferecem maior expressividade temporal com menos parâmetros que as arquiteturas tradicionais baseadas em transformadores ou LSTMs.
+A análise a seguir cobre desde a manipulação de baixo nível dos drivers da GPU até os padrões de design de software de alto nível (Clean Architecture), garantindo que o sistema seja não apenas performático, mas também sustentável e extensível.
+________________
+2. Análise Profunda do Hardware e Otimização de Baixo Nível
+A fundação de qualquer sistema de alta performance é o entendimento íntimo do silício subjacente. O Projeto Fauna deve tratar a RX 6750 XT não como uma placa gráfica, mas como um acelerador vetorial massivamente paralelo.
+2.1. Arquitetura da GPU: AMD Radeon RX 6750 XT (Navi 22)
+A RX 6750 XT baseia-se na arquitetura RDNA2 (Navi 22 KXT). Diferente da arquitetura CDNA (encontrada nas aceleradoras Instinct MI100/MI200), a RDNA2 é focada em gráficos, o que implica certas características que a nossa arquitetura de software deve acomodar.
+2.1.1. Compute Units e Wavefronts
+A GPU possui 40 Unidades de Computação (CUs). No contexto do ROCm e da compilação XLA (Accelerated Linear Algebra) do JAX, estas unidades são os motores de cálculo. A arquitetura RDNA2 opera tipicamente com Wavefronts (grupos de threads executados em lock-step) de tamanho 32 (Wave32), diferentemente dos Wave64 comuns na arquitetura GCN antiga.
+Implicação Arquitetural: O compilador XLA do JAX deve ser configurado ou induzido a gerar código que maximize a ocupação dessas waves. Operações de vetorização (jax.vmap) devem idealmente alinhar o número de agentes simulados a múltiplos de 32 ou 64 para evitar divergência de threads e garantir que as ALUs (Unidades Lógicas e Aritméticas) não fiquem ociosas esperando por threads "fantasmas". Com 40 CUs, um paralelismo que sature a GPU exigirá milhares de threads ativos. O JAX excela nisso ao "achatar" a lógica de controle dos agentes em operações matriciais densas.
+2.1.2. Infinity Cache: O Triunfo Oculto
+A característica mais crítica da RX 6750 XT para o Projeto Fauna é o Infinity Cache de 96MB. Trata-se de uma memória cache L3 de altíssima velocidade localizada no die da GPU.
+Em cargas de trabalho de IA tradicionais (como treinamento de ResNet ou BERT), os modelos e os batches de dados são grandes demais (gigabytes) para caber neste cache, tornando a largura de banda da VRAM (GDDR6, 432 GB/s) o gargalo principal. No entanto, para simulações de agentes baseados em LNNs, o estado de cada agente é minúsculo (alguns kilobytes).
+Estratégia de Otimização:
+Se conseguirmos manter o "working set" (estado atual + pesos da rede + dados físicos imediatos) de todos os agentes ativos dentro de 96MB, a simulação não será limitada pela largura de banda de 432 GB/s da memória GDDR6, mas sim pela largura de banda do Infinity Cache, que pode exceder 1 TB/s.
+* Cálculo: Se cada agente possui um estado oculto de 64 floats (256 bytes) e observações sensoriais de 256 floats (1KB), 10.000 agentes ocupam apenas ~12.5MB. Isso cabe confortavelmente no Infinity Cache, permitindo iterações de simulação extremamente rápidas.
+2.1.3. O Desafio do ISA GFX1031
+O suporte oficial do ROCm é frequentemente validado apenas para GPUs de classe "Pro" ou chips high-end (GFX1030 - RX 6800/6900). A RX 6750 XT utiliza o identificador de hardware gfx1031. Embora binariamente compatível com o gfx1030, o runtime do ROCm bloqueia a execução por padrão ao não reconhecer o ID.
+Para viabilizar o Projeto Fauna, a variável de ambiente HSA_OVERRIDE_GFX_VERSION=10.3.0 é obrigatória.1 Esta variável instrui a camada HSA (Heterogeneous System Architecture) a carregar os kernels pré-compilados para a arquitetura Navi 21 (6800 XT) e executá-los na Navi 22 (6750 XT). A experiência empírica da comunidade e benchmarks técnicos confirmam que esta operação é segura para operações matemáticas de tensores (matmul, convoluções, ativações), pois as unidades vetoriais são idênticas, diferindo apenas na contagem de CUs e largura de barramento.
+2.2. O Subsistema de Memória e PCIe
+O sistema conta com 16GB de RAM e um processador Ryzen 5600.
+* Gargalo PCIe: O Ryzen 5600 suporta PCIe 4.0. É imperativo que a GPU esteja no slot x16 primário ligado diretamente à CPU, e não ao chipset. Em simulações onde a memória vetorial (FAISS) reside na RAM da CPU e a inferência na GPU, haverá tráfego constante no barramento PCIe. A largura de banda teórica de ~32 GB/s do PCIe 4.0 x16 é suficiente, mas a latência de invocação de kernels deve ser minimizada.
+* Restrição de 16GB RAM: Esta é a restrição mais severa. O carregamento de datasets, a compilação JIT do JAX (que pode consumir muita RAM durante a otimização de grafos complexos) e o sistema operacional competem por este espaço. O Linux (Ubuntu 22.04) consome ~1-2GB. Sobram ~14GB para a aplicação. A arquitetura deve evitar carregar grandes datasets em memória; a geração procedimental de ambientes (via Brax/JAX) é preferível ao carregamento de assets estáticos.
+________________
+3. Stack Tecnológica: O Ecossistema AMD ROCm e JAX
+A escolha do JAX sobre o ROCm é estratégica. Enquanto o PyTorch oferece facilidade de uso, o JAX oferece a transparência de compilação necessária para otimizar workloads não convencionais (simulação física + redes neurais recorrentes complexas) em hardware AMD.
+3.1. Camadas da Stack
+
+
+Camada
+	Tecnologia Escolhida
+	Justificativa Técnica
+	Hardware
+	RX 6750 XT (Navi 22)
+	Melhor relação TFLOPs/Preço em RDNA2. Suporte não oficial mas robusto via ROCm.
+	Driver Kernel
+	amdgpu (Linux 5.15+)
+	Módulo do kernel que gerencia a alocação de memória e interrupções da GPU. Necessário para acesso /dev/kfd.
+	Runtime
+	ROCm 6.x
+	Versões 6.0+ trouxeram melhorias significativas de estabilidade para RDNA2 e suporte a bibliotecas matemáticas modernas.
+	Compilador
+	XLA (via JAX)
+	Compila grafos de computação inteiros em kernels otimizados, reduzindo o overhead de lançamento de kernels e maximizando a fusão de operações.
+	Framework IA
+	JAX
+	Paradigma funcional, controle explícito de estado (RNGs), vmap/scan nativos para paralelismo massivo.
+	Redes Neurais
+	Flax (Linen)
+	Biblioteca de redes neurais para JAX. Oferece separação limpa entre definição de modelo e estado de parâmetros (Clean Arch friendly).3
+	Física
+	Brax
+	Motor de física diferencial escrito em JAX. Permite que a física e o cérebro do agente rodem na mesma memória VRAM.5
+	Orquestração
+	Hydra
+	Gerenciamento hierárquico de configurações (parâmetros físicos, hiperparâmetros de treino).7
+	3.2. Estratégia de Containerização (Docker)
+Dado que o suporte gfx1031 exige variáveis de ambiente específicas e bibliotecas ROCm que podem conflitar com o OS host, o uso de Docker é mandatório para reprodutibilidade.
+Definição do Dockerfile Otimizado para Fauna:
+A imagem base deve ser a oficial rocm/jax. A configuração deve expor os dispositivos DRI e KFD.
+
+
+Dockerfile
+
+
+
+
+# Dockerfile para Projeto Fauna
+FROM rocm/jax:latest
+
+# Metadados
+LABEL maintainer="Engenharia Fauna"
+LABEL description="Ambiente JAX/ROCm otimizado para RX 6750 XT"
+
+# 1. Variáveis de Ambiente Críticas para RDNA2
+# Força a compatibilidade com kernels compilados para Navi 21
+ENV HSA_OVERRIDE_GFX_VERSION=10.3.0
+# Define alocação de memória do XLA para ser menos agressiva (85% da VRAM)
+# Isso evita travamentos do display se a GPU também renderizar o desktop
+ENV XLA_PYTHON_CLIENT_MEM_FRACTION=0.85
+# Otimizações de compilação
+ENV XLA_FLAGS="--xla_gpu_autotune_level=2"
+
+# 2. Instalação de Dependências de Sistema
+RUN apt-get update && apt-get install -y \
+   git \
+   htop \
+   libgl1-mesa-glx \
+   && rm -rf /var/lib/apt/lists/*
+
+# 3. Dependências Python (Flax, Brax, Hydra, FAISS)
+# Instalamos faiss-cpu para economizar VRAM e usar a RAM de sistema para memória vetorial
+RUN pip install --upgrade pip && \
+   pip install \
+   flax \
+   optax \
+   chex \
+   hydra-core \
+   brax \
+   faiss-cpu \
+   matplotlib \
+   tqdm \
+   orbax-checkpoint
+
+# 4. Configuração de Diretório e Permissões
+WORKDIR /app
+
+Comando de Execução (Runtime Command): O comando docker run deve gerenciar cuidadosamente a memória compartilhada (--shm-size). O JAX/XLA utiliza memória compartilhada para comunicação inter-processos durante a compilação paralela. O padrão do Docker (64MB) é insuficiente e causará falhas silenciosas ou "Bus Errors".8 Com 16GB de RAM total, alocar 8GB para SHM é um equilíbrio seguro.
+
+
+Bash
+
+
+
+
+docker run -it \
+ --name fauna_env \
+ --network=host \
+ --device=/dev/kfd \
+ --device=/dev/dri \
+ --ipc=host \
+ --shm-size 8G \
+ --group-add video \
+ --group-add render \
+ --cap-add=SYS_PTRACE \
+ --security-opt seccomp=unconfined \
+ -v $(pwd):/app \
+ project_fauna:latest
+
+Nota: A flag --network=host é útil se houver ferramentas de visualização ou dashboards (como TensorBoard) rodando no container.
+________________
+4. Arquitetura de Software: Clean Architecture e Programação Funcional
+A aplicação de "Clean Architecture" (Robert C. Martin) em um paradigma funcional como o JAX exige uma adaptação conceitual. Em vez de classes e objetos encapsulando estado, separamos rigorosamente Dados (Imutáveis) de Comportamento (Funções Puras) e Efeitos Colaterais (Infraestrutura).9
+4.1. Camadas da Arquitetura Fauna
+4.1.1. Camada de Domínio (Entidades)
+Esta é a camada mais interna. Ela contém apenas definições de tipos de dados que modelam o universo do Projeto Fauna. Não deve haver dependências de frameworks externos complexos, apenas estruturas de dados (JAX pytrees ou flax.struct.dataclass).
+* Conceitos: Genoma do Agente, Estado Físico (Posição, Velocidade), Configuração do Mundo.
+* Imutabilidade: Todos os estados são imutáveis. Uma função de atualização recebe Estado(t) e retorna Estado(t+1).
+4.1.2. Camada de Casos de Uso (Lógica de Aplicação)
+Aqui reside a lógica "pura" da simulação. É onde o JAX brilha.
+* Simulation Step: Uma função que orquestra a física (Brax) e a cognição (LNN).
+* Políticas de Cognição: A implementação matemática das Redes Neurais Líquidas.
+* Regras de Negócio: Metabolismo, regras de reprodução, morte.
+* Nota: Todo código nesta camada deve ser compilável via @jax.jit. Não deve haver I/O (print, save to disk) dentro destas funções.
+4.1.3. Camada de Adaptadores de Interface
+Converte dados do formato conveniente para os Casos de Uso e Entidades, para o formato de agências externas.
+* Checkpoints: Converte o estado do JAX (pytrees) para bytes via orbax.
+* Memória Vetorial: Converte embeddings JAX (na GPU) para arrays NumPy (na CPU) para inserção no FAISS.
+4.1.4. Camada de Infraestrutura
+O "mundo sujo". Drivers, Banco de Dados, UI, CLI.
+* ROCm Backend: Gerenciado pelo JAX.
+* FAISS: A implementação concreta da memória.
+* Hydra: Carregamento de arquivos YAML.
+4.2. Estrutura de Pastas Recomendada
+A estrutura reflete a separação de responsabilidades.
+project_fauna/
+├── config/ # (INFRA) Configurações Hydra
+│ ├── experiment/ # Overrides para experimentos específicos
+│ ├── hardware/ # Perfis (desktop_6750xt.yaml, server_h100.yaml)
+│ └── config.yaml # Entry point de configuração
+├── docker/ # (INFRA) Dockerfiles e scripts de build
+├── notebooks/ # Análises exploratórias (fora da source tree principal)
+├── src/
+│ ├── init.py
+│ ├── core/ # (DOMÍNIO) Entidades e Tipos
+│ │ ├── types.py # Definições de tipos Chex/Typing
+│ │ ├── state.py # Dataclasses do Estado do Mundo/Agente
+│ │ └── genome.py # Estrutura do Genoma (pesos da LNN)
+│ ├── systems/ # (CASOS DE USO) Lógica Pura
+│ │ ├── physics.py # Wrapper sobre Brax (Differentiable Physics)
+│ │ ├── brain.py # Implementação Flax das Redes Líquidas (CfC)
+│ │ ├── sensors.py # Lógica de percepção (Raycasting, etc.)
+│ │ └── evolution.py # Algoritmos Genéticos / Reinforcement Learning
+│ ├── adapters/ # (ADAPTADORES) Interfaces
+│ │ ├── memory_interface.py # Protocolo para memória associativa
+│ │ └── visualizer.py # Renderização de frames
+│ ├── infrastructure/ # (INFRA) Implementações Concretas
+│ │ ├── faiss_memory.py # Implementação FAISS-CPU da memória
+│ │ ├── rocm_check.py # Validação de ambiente GPU
+│ │ └── io.py # Checkpointing com Orbax
+│ └── main.py # (ENTRY POINT) Loop principal
+├── tests/ # Testes Unitários (pytest)
+├── requirements.txt
+└── README.md
+________________
+5. Arquitetura Cognitiva: Redes Neurais Líquidas (LNN) e CfC
+Para o "cérebro" dos agentes, o Projeto Fauna utilizará Closed-form Continuous (CfC) Networks. Esta escolha é superior a MLPs ou LSTMs tradicionais para este hardware e domínio específicos.
+5.1. Justificativa Teórica e Matemática
+LNNs são inspiradas no sistema nervoso de organismos microscópicos (como o C. elegans). Elas modelam a atividade neural não como passos discretos, mas como equações diferenciais contínuas. O modelo CfC 11 resolve a equação diferencial do "Liquid Time Constant" (LTC) de forma fechada aproximada.
+A equação de atualização de estado oculta    é dada por:
+  
+
+Onde:
+*   : Sigmoide (mecanismo de gate).
+*   : Produto de Hadamard (elemento a elemento).
+*   : Redes neurais (MLPs) que compartilham um backbone.
+*   : O passo de tempo físico (delta time).
+Vantagens para RX 6750 XT:
+   1. Densidade Computacional: Ao contrário de ODE Solvers numéricos (Runge-Kutta), que requerem múltiplos passos de avaliação por inferência (lentos em GPU), a solução CfC é um cálculo direto ("closed-form"). Isso permite que o JAX compile a atualização neural e a atualização física em um único kernel fundido.
+   2. Adaptive Horizon: A rede recebe o    como entrada. Se a simulação física do Brax tiver passos de tempo variáveis ou se o agente precisar "raciocinar" sobre escalas de tempo diferentes, a CfC adapta sua constante de tempo dinamicamente.
+   3. Parâmetros Reduzidos: LNNs tendem a generalizar melhor com menos neurônios que LSTMs, economizando VRAM e Infinity Cache.
+5.2. Implementação em Flax (Snippet de Código)
+A implementação deve residir em src/systems/brain.py. Utilizaremos flax.linen para definir a camada.
+
+
+Python
+
+
+
+
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
+from typing import Callable
+
+class CfCCell(nn.Module):
+   hidden_size: int
+   backbone_activation: Callable = nn.tanh
+   
+    @nn.compact
+   def __call__(self, h, input_signal, time_delta):
+       """
+       h: Estado oculto anterior (Batch, Hidden)
+       input_signal: Entrada sensorial atual (Batch, Input)
+       time_delta: Escalar ou vetor representando dt
+       """
+       # Concatenação do estado anterior e entrada
+       input_state = jnp.concatenate([h, input_signal], axis=-1)
+       
+       # Backbone compartilhado (Feature Extraction)
+       # Reduz a dimensionalidade e extrai features comuns
+       backbone = nn.Dense(self.hidden_size, name="backbone")(input_state)
+       backbone = self.backbone_activation(backbone)
+       
+       # Cabeças (Heads) para os componentes da fórmula CfC
+       # ff1: Componente de decaimento
+       ff1 = nn.Dense(self.hidden_size, name="ff1")(backbone)
+       # ff2: Componente de entrada/interferência
+       ff2 = nn.Dense(self.hidden_size, name="ff2")(backbone)
+       # time_gate: Controla a constante de tempo líquida
+       time_gate_layer = nn.Dense(self.hidden_size, name="time_gate")(backbone)
+       
+       # Mecanismo de Gating Temporal
+       # A sigmoide modula a mistura entre o estado passado e o novo estímulo
+       # baseada no tempo decorrido e na "vontade" da rede (time_gate)
+       time_gate = nn.sigmoid(time_gate_layer * time_delta) 
+       
+       # Atualização de Estado (Fórmula CfC)
+       h_new = (time_gate * ff1) + ((1.0 - time_gate) * ff2)
+       
+       return h_new, h_new
+
+class AgentBrain(nn.Module):
+   action_dim: int
+   hidden_dim: int = 64
+   
+    @nn.compact
+   def __call__(self, obs, time_delta):
+       # Inicialização do estado oculta (scan carry)
+       # Em arquiteturas recorrentes no JAX, geralmente gerenciamos o estado fora
+       # mas aqui simplificamos a visualização.
+       Batch = obs.shape
+       
+       # LSTM/RNN Scan logic would go here via flax.linen.scan
+       # For simplicity, presenting the cell application
+       rnn_cell = CfCCell(self.hidden_dim)
+       
+       #... logic to apply rnn_cell...
+       
+       # Action Head
+       action_logits = nn.Dense(self.action_dim)(rnn_output)
+       return action_logits
+
+________________
+6. Otimização de Memória e VRAM Budgeting
+A restrição de 12GB de VRAM e 16GB de RAM é crítica. O Projeto Fauna deve operar "perto do metal".
+6.1. Orçamento de VRAM (GPU)
+A VRAM armazena: Estado Físico (Brax), Pesos da Rede (Flax), Estado Oculto dos Agentes, e Buffers de Ativação (para backpropagation durante treino).
+Cálculo Estimado para 10.000 Agentes:
+      1. Estado Físico (Brax): Suponha um corpo rígido simples (ex: Ant). ~100 floats por agente (posição, rot, vel, juntas).
+      *    bytes (float32)    MB. (Insignificante).
+         2. Estado Neural (CfC): Hidden size 64.
+         *    bytes    MB. (Cabe no Infinity Cache!).
+            3. Observações Visuais: Se usarmos visão baseada em pixels, o consumo explode.
+            * Decisão Arquitetural: Usar Raycasting ou observações simbólicas (vetores de distância) em vez de renderização de pixels. Raycasting vetorial mantém o consumo baixo.
+            4. Buffers de Treino (PPO): O PPO armazena trajetórias. Com steps de 1000 frames.
+            *   .
+            * Alerta: Isso consome quase toda a VRAM.
+Estratégias de Mitigação:
+               1. Precisão Mista (Bfloat16): A RX 6750 XT suporta bfloat16 nativamente. Converter estados e observações para bfloat16 reduz o consumo de memória pela metade (10GB -> 5GB), deixando margem confortável.13 O JAX suporta isso trivialmente via jax.numpy.astype(jnp.bfloat16).
+               2. Gradient Checkpointing (jax.remat): Para redes mais profundas, recalculamos ativações durante o backward pass em vez de armazená-las.
+               3. Mini-batching no Update: Não atualizar os 10.000 agentes de uma vez no passo de gradiente. Coletar dados de todos, mas fazer o update dos pesos em mini-batches.
+6.2. Solução de Memória Vetorial Leve (RAM CPU)
+Os agentes precisam de memória episódica (lembrar onde encontraram comida). Armazenar vetores densos na VRAM é inviável para longos históricos.
+Solução Selecionada: FAISS com Quantização de Produto (IVFPQ).
+O FAISS (Facebook AI Similarity Search) é a biblioteca padrão ouro.
+               * Por que não Banco de Dados (Milvus/Chroma)? O overhead de rodar um serviço Dockerizado (gRPC, serialização JSON, HTTP) é inaceitável para uma simulação em tempo real. ChromaDB usa SQLite/Clickhouse que pode ser lento para alta frequência de escrita.
+               * FAISS-CPU Integrado: A biblioteca C++ roda no mesmo processo Python via bindings.
+               * Otimização IVFPQ (Inverted File + Product Quantization):
+               * Permite comprimir vetores float32 (4 bytes/dim) para representações inteiras compactas. Um vetor de 512 dimensões (2KB) pode ser comprimido para ~64 bytes com perda mínima de precisão na busca.
+               * Isso permite armazenar milhões de memórias nos 16GB de RAM do sistema sem causar swapping.
+Fluxo de Dados Híbrido:
+               1. GPU (JAX): Agente decide "Lembrar". Gera embedding (vetor).
+               2. Host Callback (jax.pure_callback): O JAX pausa a thread do agente (ou usa fila assíncrona) para enviar o vetor à CPU.
+               3. CPU (FAISS): Adiciona vetor ao índice.
+               4. Recuperação: Agente consulta memória -> Callback CPU -> Busca FAISS -> Retorna índices/valores para a GPU.
+               * Nota: Para evitar gargalo no PCIe, as consultas de memória não devem ocorrer a cada frame (ex: apenas a cada 10 ou 100 frames).
+________________
+7. Roteiro de Desenvolvimento (MVP à Simulação Otimizada)
+Este roteiro é desenhado para mitigar riscos técnicos cedo (principalmente a compatibilidade ROCm).
+Fase 1: Fundação e Validação de Hardware (Semanas 1-2)
+               * Objetivo: Rodar uma multiplicação de matrizes no JAX/ROCm sem erros.
+               * Tarefas:
+               1. Configurar Ubuntu e Drivers.
+               2. Criar Dockerfile com HSA_OVERRIDE_GFX_VERSION.
+               3. Executar benchmark sintético (matmul) monitorando rocm-smi para confirmar uso da GPU e VRAM.
+               4. Implementar teste de unidade "Hello World" com Flax.
+Fase 2: O MVP da Física (Semanas 3-4)
+               * Objetivo: Um único agente movendo-se em um ambiente Brax.
+               * Tarefas:
+               1. Implementar estrutura de pastas (Clean Architecture).
+               2. Configurar ambiente Brax (ex: brax.envs.ant).
+               3. Criar loop de renderização simples (salvar frames como GIF).
+               4. Validar performance (Steps Per Second - SPS) com jax.jit.
+Fase 3: O Cérebro Líquido (Semanas 5-6)
+               * Objetivo: Substituir a política padrão (MLP) por uma CfC Network.
+               * Tarefas:
+               1. Implementar a classe CfCCell em Flax.
+               2. Treinar o agente para andar usando PPO (Proximal Policy Optimization).
+               3. Comparar curvas de aprendizado MLP vs CfC.
+Fase 4: Escala e Memória (Semanas 7-9)
+               * Objetivo: Simulação Multi-Agente (1000+) com Memória Vetorial.
+               * Tarefas:
+               1. Aplicar jax.vmap no step de ambiente e política.
+               2. Implementar o wrapper FaissMemory na CPU.
+               3. Integrar jax.pure_callback para conectar GPU e CPU.
+               4. Tuning de bfloat16 para maximizar número de agentes.
+Fase 5: Otimização e Polimento (Semanas 10+)
+               * Objetivo: Maximizar SPS e estabilidade.
+               * Tarefas:
+               1. Profiling com JAX Profiler (Tensorboard). Identificar gargalos de compilação ou transferência de memória.
+               2. Ajustar hiperparâmetros do FAISS (nprobe, nlist) para balancear precisão/velocidade.
+               3. Implementar visualizador avançado.
+________________
+8. Conclusão
+O Projeto Fauna representa um exercício avançado de arquitetura de sistemas. Ao rejeitar a dependência de hardware de servidor e abraçar as idiossincrasias da RX 6750 XT e do Ryzen 5600, o projeto não apenas reduz custos, mas força uma disciplina de engenharia que prioriza a eficiência algorítmica.
+A combinação de JAX (para compilação de física e lógica em kernels fundidos), ROCm (com os devidos overrides para RDNA2) e Redes Neurais Líquidas (para processamento temporal compacto) cria um sistema capaz de simular milhares de agentes complexos em tempo real. O uso estratégico de FAISS quantizado na RAM contorna as limitações de memória, criando um sistema de memória híbrido CPU-GPU viável.
+Esta arquitetura prova que a fronteira da IA bio-inspirada e da vida artificial está acessível não apenas a grandes laboratórios de pesquisa, mas a engenheiros dispostos a dominar a stack completa, do driver ao neurônio.
+________________
+Referências Integradas ao Contexto
+As decisões técnicas acima são fundamentadas na documentação oficial e pesquisa comunitária:
+               * A necessidade de HSA_OVERRIDE para RDNA2 é documentada em guias de instalação de terceiros e discussões da comunidade ROCm.1
+               * A eficiência das redes CfC sobre ODEs numéricas é detalhada nos papers originais de Hasani et al..11
+               * A capacidade do Brax de rodar física massiva em GPU via JAX é central para a viabilidade do projeto.5
+               * A escolha do FAISS vs Bancos Vetoriais pesados baseia-se em benchmarks de latência e footprint de memória.16
+               * A estrutura de Clean Architecture adapta princípios de separação de responsabilidades para o contexto de ML.9
+Referências citadas
+               1. Getting AMD ROCm Working on the RX 6750 XT (Ubuntu 22.04), acessado em fevereiro 9, 2026, https://vandragt.com/getting-amd-rocm-working-on-the-rx-6750-xt-ubuntu-22-04-
+               2. How I Made My AMD RX6750XT Work for Machine Learning (Despite ROCm Limitations), acessado em fevereiro 9, 2026, https://dev.to/lionthehoon/how-i-made-my-amd-rx6750xt-work-for-machine-learning-despite-rocm-limitations-553a
+               3. Core examples - Flax - Read the Docs, acessado em fevereiro 9, 2026, https://flax.readthedocs.io/en/v0.8.2/examples/core_examples.html
+               4. Neural networks with JAX - Flax, acessado em fevereiro 9, 2026, https://flax.readthedocs.io/en/v0.8.1/
+               5. google/brax: Massively parallel rigidbody physics simulation on accelerator hardware. - GitHub, acessado em fevereiro 9, 2026, https://github.com/google/brax
+               6. BraxEnv — torchrl main documentation, acessado em fevereiro 9, 2026, https://docs.pytorch.org/rl/main/reference/generated/torchrl.envs.BraxEnv.html
+               7. Complete tutorial on how to use Hydra in Machine Learning projects, acessado em fevereiro 9, 2026, https://towardsdatascience.com/complete-tutorial-on-how-to-use-hydra-in-machine-learning-projects-1c00efcc5b9b/
+               8. JAX on ROCm installation, acessado em fevereiro 9, 2026, https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/jax-install.html
+               9. Applying the pragmatic clean architecture to design AI agents, workflows and LLM apps that don't fall apart - Reddit, acessado em fevereiro 9, 2026, https://www.reddit.com/r/learnmachinelearning/comments/1qdfan6/applying_the_pragmatic_clean_architecture_to/
+               10. ardalis/CleanArchitecture: Clean Architecture Solution Template - GitHub, acessado em fevereiro 9, 2026, https://github.com/ardalis/CleanArchitecture
+               11. Closed-form Continuous-time Neural Networks arXiv:2106.13898v2 [cs.LG] 2 Mar 2022, acessado em fevereiro 9, 2026, https://arxiv.org/pdf/2106.13898
+               12. Amazon SageMaker algorithm for time series forecasting with liquid neural networks (LNNs). - GitHub, acessado em fevereiro 9, 2026, https://github.com/flaviagiammarino/lnn-sagemaker
+               13. How To Calculate GPU VRAM Requirements for an Large-Language Model, acessado em fevereiro 9, 2026, https://apxml.com/posts/how-to-calculate-vram-requirements-for-an-llm
+               14. GPU VRAM Calculation for LLM Inference and Training - YouTube, acessado em fevereiro 9, 2026, https://www.youtube.com/watch?v=RYRR5ma4uh8
+               15. Closed-Form Continuous-Time Neurons - Emergent Mind, acessado em fevereiro 9, 2026, https://www.emergentmind.com/topics/closed-form-continuous-time-neurons-cfcs
+               16. What's the best Vector DB? What's new in vector db and how is one better than other? [D], acessado em fevereiro 9, 2026, https://www.reddit.com/r/MachineLearning/comments/1ijxrqj/whats_the_best_vector_db_whats_new_in_vector_db/
+               17. How do FAISS and Annoy compare in terms of index build time and memory usage for large datasets, and what might drive the decision to use one over the other? - Milvus, acessado em fevereiro 9, 2026, https://milvus.io/ai-quick-reference/how-do-faiss-and-annoy-compare-in-terms-of-index-build-time-and-memory-usage-for-large-datasets-and-what-might-drive-the-decision-to-use-one-over-the-other

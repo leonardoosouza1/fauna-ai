@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  fauna:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: fauna_env
+    network_mode: host
+    ipc: host
+    shm_size: "8G"
+    group_add:
+      - video
+      - render
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    volumes:
+      - ..:/app
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.85
+      - XLA_FLAGS=--xla_gpu_autotune_level=2
+    stdin_open: true
+    tty: true

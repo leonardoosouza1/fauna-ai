@@ -1,0 +1,24 @@
+# Perfil de Hardware: AMD RX 6750 XT + Ryzen 5600 + 16GB RAM
+gpu:
+  name: "RX 6750 XT"
+  arch: "gfx1031"
+  vram_gb: 12
+  infinity_cache_mb: 96
+  compute_units: 40
+  wave_size: 32
+
+cpu:
+  name: "Ryzen 5 5600"
+  cores: 6
+  threads: 12
+
+memory:
+  ram_gb: 16
+  pcie_gen: 4
+  pcie_lanes: 16
+
+optimization:
+  use_bfloat16: true
+  xla_mem_fraction: 0.85
+  gradient_checkpointing: true
+  hsa_override: "10.3.0"

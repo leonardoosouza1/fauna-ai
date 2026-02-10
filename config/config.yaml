@@ -1,0 +1,9 @@
+# Configuração principal Hydra — Projeto Fauna
+defaults:
+  - hardware: desktop_6750xt
+  - experiment: default
+
+simulation:
+  seed: 42
+  log_interval: 100
+  checkpoint_interval: 1000
