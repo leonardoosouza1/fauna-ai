@@ -1,0 +1,295 @@
+﻿Relatório Técnico de Simulação Bio-Computacional: Dinâmica Trófica, Parâmetros Alométricos e Arquitetura de Agentes no Ecotono Pampa-Mata Atlântica
+Sumário Executivo e Escopo do Sistema
+Este documento estabelece as especificações biológicas, termodinâmicas e computacionais para o desenvolvimento de uma simulação multiagente de alta fidelidade ("MIT-level") focada na fauna do Sul do Brasil. O objetivo é modelar as interações tróficas e comportamentais no ecótono entre o Bioma Pampa e a Mata Atlântica, utilizando uma arquitetura de software otimizada para aceleração via hardware (GPU) e redes neurais bio-inspiradas.
+O modelo baseia-se no conceito de População Mínima Viável (MVP) distribuída em cinco guildas funcionais:
+1. Produtor Primário: Complexo de Gramíneas Nativas (C3/C4) e Floresta de Araucária.
+2. Herbívoro Pequeno (Consumidor Primário): Cavia aperea (Preá) e Sylvilagus brasiliensis (Tapeti).
+3. Herbívoro Grande (Consumidor Primário): Ozotoceros bezoarticus (Veado-campeiro) e Hydrochoerus hydrochaeris (Capivara).
+4. Mesopredador: Lycalopex gymnocercus (Graxaim-do-campo) e Leopardus pardalis (Jaguatirica).
+5. Predador Apex: Puma concolor (Onça-parda).
+A simulação transcende modelos estocásticos simples ao integrar a Lei de Kleiber para restrições metabólicas, Políticas de Circuito Neural (NCPs) para tomada de decisão contínua no tempo, e uma infraestrutura baseada em JAX/ROCm para vetorização massiva de agentes.
+________________
+1. Caracterização Biofísica do Ecotono Pampa-Mata Atlântica
+A viabilidade de qualquer simulação ecológica reside na precisão de sua matriz energética. No Sul do Brasil, a disponibilidade de biomassa não é constante; ela é pulsada pela sazonalidade térmica e radiativa, criando gargalos metabólicos que definem a sobrevivência da fauna.
+1.1. Produtividade Primária Líquida e Densidade Calórica
+O Pampa é um bioma campestre dominado por herbáceas, coexistindo com mosaicos florestais (Mata Atlântica/Araucária). A dinâmica de energia é regida pela alternância entre gramíneas de metabolismo C3 (inverno/primavera) e C4 (verão).
+Dinâmica de Biomassa e Fluxo de Carbono
+Estudos de covariância de vórtices (eddy covariance) realizados na região da Depressão Central e na Campanha gaúcha revelam que os campos nativos funcionam como sumidouros de carbono durante a estação quente (setembro a março), impulsionados pela alta eficiência fotossintética das gramíneas C4 como Andropogon lateralis e Paspalum notatum. Durante a estação fria (abril a agosto), a respiração do ecossistema frequentemente excede a fotossíntese, transformando o campo em uma fonte líquida de CO2 e, crucialmente para a simulação, reduzindo a taxa de reposição de biomassa palatável.1
+A Produtividade Primária Líquida Aérea (ANPP) anual em campos bem preservados é estimada em aproximadamente 5.300 kg de Matéria Seca (MS) por hectare/ano (ou 0,53 kg MS/m²/ano).3 No entanto, a disponibilidade instantânea de biomassa ("standing crop") varia significativamente com o manejo e a estação, oscilando entre 2.900 e 6.300 kg MS/ha.4
+Densidade Energética para Herbívoros
+Para a simulação, o valor calórico bruto da vegetação deve ser descontado pela digestibilidade, que varia sazonalmente devido à lignificação da parede celular vegetal.
+* Energia Bruta (EB): ~18,0 a 18,5 MJ/kg MS.
+* Energia Digestível (ED): Apenas uma fração da EB é acessível. No verão, com brotações jovens, a ED pode atingir 10,5 MJ/kg MS. No inverno, com o envelhecimento dos tecidos e predominância de palha morta, a ED cai para 8,0 MJ/kg MS ou menos.5
+* Coeficiente de Consumo: Dados de satélite utilizando Potência Radiativa do Fogo (FRP) sugerem uma densidade de biomassa consumível instantânea de aproximadamente 0,4 a 0,6 kg/m² em áreas não pastoreadas intensivamente.6
+Tabela de Parâmetros de Simulação: Produtor (Gramíneas)
+
+
+Parâmetro
+	Valor/Faixa
+	Unidade
+	Contexto Ecológico
+	Referências
+	Biomassa Máxima (K)
+	0,6
+	  
+
+	Capacidade de suporte sem pastejo.
+	3
+	Produtividade Anual
+	530
+	  
+
+	Soma total de crescimento.
+	3
+	Taxa Cresc. (Verão)
+	3,5 – 4,5
+	  
+
+	Pico C4, alta radiação.
+	7
+	Taxa Cresc. (Inverno)
+	0,5 – 1,0
+	  
+
+	Gargalo metabólico crítico.
+	1
+	Densidade Calórica
+	9,5 (médio)
+	  
+
+	Energia digestível média.
+	5
+	Índice de Área Foliar (IAF)
+	1,5 – 3,0
+	Adimensional
+	Proxy para "cover" visual de presas.
+	7
+	1.2. O Componente Florestal: Araucária e Refúgios
+A Floresta Ombrófila Mista (Mata de Araucária) insere heterogeneidade estrutural. Embora a biomassa arbórea não seja a fonte primária de alimento para os herbívoros pastadores (grazers) como o veado-campeiro, ela fornece recursos críticos sazonais e refúgio.
+* Pinhão (Araucaria angustifolia): Sementes ricas em amido disponíveis no outono/inverno, cruciais para a manutenção de roedores e, indiretamente, de seus predadores durante o período de baixa produtividade das gramíneas.
+* Termorregulação: As matas de galeria e capões oferecem microclimas estáveis, reduzindo o custo metabólico de termorregulação para mamíferos homeotérmicos durante geadas ou ondas de calor, um fator a ser codificado na função de custo de "conforto" dos agentes.8
+________________
+2. Fundamentos de Modelagem Metabólica e Alometria
+Para simular o comportamento emergente de forma realista, os agentes não devem mover-se aleatoriamente, mas sim maximizar sua aptidão (fitness) sob restrições termodinâmicas. A Lei de Kleiber é a equação governante para o balanço energético.
+2.1. Taxa Metabólica Basal (TMB)
+A equação fundamental para a Taxa Metabólica Basal é   . Para a maioria dos mamíferos,   . No entanto, a constante de normalização    (alpha) varia biogeograficamente. Análises de mamíferos neotropicais sugerem que estes possuem TMBs ligeiramente inferiores aos seus equivalentes neárticos (América do Norte), uma adaptação evolutiva a ambientes quentes e, por vezes, imprevisíveis, e à menor necessidade de termogênese obrigatória constante.9
+Utilizaremos    a    (para resultado em Watts e massa em kg) como base, ajustada por espécie.
+2.2. Taxa Metabólica de Campo (FMR) e Custo de Transporte (COT)
+A TMB representa o custo de "estar vivo" em repouso. Na simulação, o custo real é a Taxa Metabólica de Campo (FMR), que inclui custos de locomoção, digestão e alerta.
+* FMR: Escala tipicamente como    ou aproximadamente 2 a 3 vezes a TMB.10
+* Custo de Transporte (COT): A eficiência energética do movimento não é linear. Animais menores gastam mais energia por kg para mover-se um metro do que animais grandes.
+  
+Onde   .11 Isso implica que o Puma (40kg) é um patrulhador muito mais eficiente energeticamente do que um Preá (0,6kg), definindo os raios de forrageamento (Home Range).
+2.3. Alometria Sensorial
+A capacidade de detectar presas ou predadores dita as interações. O alcance visual e a acuidade escalam com o tamanho do olho e, alometricamente, com a massa corporal.
+   * Distância de Detecção Visual (  ):   .13
+   * Implicação: Um predador grande vê a presa muito antes de ser visto visualmente, mas a presa pequena muitas vezes depende de outras modalidades (audição/olfato) ou refúgio físico para compensar essa assimetria.
+________________
+3. Fichas Técnicas Detalhadas: Herbívoros (Consumidores Primários)
+3.1. Cavia aperea (Preá) - O "Combustível" do Ecossistema
+O preá é um roedor caviomorfo, ancestral da cobaia doméstica, e representa a base de presas para mesopredadores.
+Morfologia e Dimensões:
+      * Massa Corporal: 0,500 a 0,637 kg. Machos (~500g) são ligeiramente maiores que fêmeas não-prenhes (~440g), mas fêmeas frequentemente carregam grande massa fetal.14
+      * Comprimento: ~272 mm. Corpo compacto, sem cauda visível, adaptado para tunelamento em vegetação densa.
+Parâmetros Metabólicos (Simulação):
+      * TMB (Kleiber):    Watts.
+      * Ingestão Diária: Requer cerca de 47g de Matéria Seca/dia para manutenção e crescimento em dieta de alta energia, o que representa ~8-10% da massa corporal, indicando um turnover energético elevadíssimo.16
+      * Regulação Térmica: Alta sensibilidade ao frio. Abaixo de 15°C, a energia é desviada do crescimento para a termogênese, reduzindo a conversão de biomassa.17
+Locomoção e Evasão:
+         * Velocidade Máxima (  ): 6,0 m/s (explosão).
+         * Velocidade Sustentada: ~3,5 m/s (galope).14
+         * Estratégia: "Run-and-hide". O COT elevado impede fugas longas. A estratégia depende de atingir cobertura vegetal densa em segundos. Fêmeas prenhes mantêm capacidade de aceleração de explosão, um traço evolutivo crítico para sobrevivência.14
+Reprodução (Estratégia r):
+            * Gestação: 62 dias.
+            * Ninhada: 1 a 3 filhotes precociais (nascem com pelos, olhos abertos e móveis).
+            * Maturidade Sexual: Extremamente precoce. Fêmeas podem conceber aos 30-40 dias de idade se houver machos adultos presentes (efeito social).18
+            * Potencial Reprodutivo: Cio pós-parto permite gravidez contínua. Em simulação, isso cria "booms" populacionais rápidos após chuvas que aumentam a biomassa vegetal.
+Dados Sensoriais e Comportamentais:
+            * Visão: Campo de visão (FOV) panorâmico para detecção de predadores aéreos e terrestres, mas baixa acuidade. Distância de reação estimada em 20-30 metros para vultos.
+            * Área de Vida: Pequena e linear, frequentemente 0,02 a 0,1 ha, associada a bordas de vegetação (ecotonos micro-escala).19
+________________
+3.2. Ozotoceros bezoarticus (Veado-campeiro) - O Pastador Seletivo
+O veado-campeiro é um cervídeo cursorial especializado em ambientes abertos, crucial para a manutenção da estrutura do campo e presa principal da onça-parda.
+Morfologia e Dimensões:
+            * Massa Corporal: 30 a 40 kg (Machos > Fêmeas).20
+            * Estrutura: Adaptado para corrida, altura na cernelha ~70-75 cm. Machos possuem chifres ramificados (3 pontas), trocados anualmente.
+Parâmetros Metabólicos (Simulação):
+            * TMB (Kleiber):    Watts (~1.000 kcal/dia apenas para manutenção basal).
+            * Dieta: Pastador-podador (grazer-browser). Altamente seletivo para partes de plantas com alta digestibilidade (folhas jovens, flores, leguminosas nativas). Não tolera bem forragem fibrosa de inverno, exigindo expansão da área de busca.
+            * Ingestão: ~2,5 a 3,0% do peso vivo em MS/dia (~1,0 kg MS).
+Locomoção:
+               * Velocidade: Capaz de atingir 50 km/h (~14 m/s).
+               * Movimento Diário: Deslocamento médio de 0,7 a 3,4 km/dia, dependendo da densidade de forragem.20 A simulação deve penalizar movimentos excessivos devido ao alto custo absoluto de energia.
+Reprodução (Estratégia K):
+               * Gestação: ~7 meses (213 dias).
+               * Prole: 1 filhote por ano (raramente 2).
+               * Sazonalidade: Nascimentos concentrados na primavera/verão para coincidir com o pico de proteína nas gramíneas, essencial para a lactação.21
+Sensorial e Comunicação:
+               * Olfato (Parâmetro Crítico): Possui glândulas interdigitais especializadas. Detecção olfativa de predadores (ex: urina de puma) a distâncias de até 1,5 km (com vento favorável).22 Isso cria uma "zona de exclusão" dinâmica ao redor do predador na simulação.
+               * Visão: Otimizada para detecção de movimento no horizonte (faixa visual horizontal na retina).
+________________
+3.3. Hydrochoerus hydrochaeris (Capivara) - O Engenheiro do Ecossistema
+Embora menos detalhada nos snippets iniciais, a capivara é essencial para o modelo como biomassa alternativa para a onça e competidora do veado.
+               * Massa: 35-65 kg.
+               * Nicho: Herbívoro semiaquático. Pastador de gramíneas C4 próximas a corpos d'água.
+               * Interação: Refúgio na água em vez de fuga cursorial. Na simulação, sua presença é restrita a células adjacentes a recursos hídricos.
+________________
+4. Fichas Técnicas Detalhadas: Predadores e Mesopredadores
+4.1. Lycalopex gymnocercus (Graxaim-do-campo) - O Estabilizador Onívoro
+Este canídeo desempenha um papel fundamental na estabilidade do sistema devido à sua plasticidade trófica.
+Morfologia e Massa:
+               * Massa: 4,0 a 6,5 kg.23
+               * Dimensões: ~62 cm (corpo) + 34 cm (cauda).
+Metabolismo e Dieta:
+               * TMB:    Watts.
+               * Dieta Flexível (Holling Tipo III):
+                  * Carnivoria: Pequenos mamíferos (Cavia, Mus), insetos (coleópteros), lebres (Lepus - exótica, mas presente).
+                  * Frugivoria Facultativa: Consome grandes quantidades de frutos nativos (Syagrus romanzoffiana, Butia, Ziziphus mistol).25
+                  * Impacto na Simulação: Quando a densidade de Cavia cai abaixo de um limiar, o Graxaim muda para frutos/insetos. Isso impede a extinção da presa (refúgio ecológico funcional) e mantém a população de predadores estável.
+Reprodução:
+                  * Sistema: Monogâmico (casais defendem território).
+                  * Gestação: 55-60 dias.
+                  * Ninhada: 3 a 5 filhotes.27
+                  * Cuidado Parental: Ambos os pais alimentam a prole, atuando como "forrageadores de lugar central" (trazem comida para a toca).28
+Sensorial:
+                  * Olfato: Sentido primário de caça. Detecção de presas pequenas a curta distância (<50m), mas carniça a longas distâncias (>500m).
+                  * Território: 1 a 5 km².
+4.2. Leopardus pardalis (Jaguatirica) - O Caçador Furtivo
+Diferente do Graxaim, a Jaguatirica é um carnívoro estrito, ocupando nichos florestais e de borda.
+Morfologia e Massa:
+                  * Massa: 8,5 a 16 kg (Dimorfismo sexual acentuado, machos maiores).29
+                  * Metabolismo: TMB ~17,4 Watts (baseado em 10,5 kg). Alta demanda proteica.30
+Ecologia Trófica:
+                  * Dieta: Especialista em pequenos vertebrados. Roedores (65%), répteis, aves. Ocasionalmente presas maiores como cutias ou filhotes de veado.
+                  * Caça: Predador de emboscada noturno. Depende de cobertura vegetal.
+                  * Eficiência: Captura média de 0,9 presas por km percorrido.29
+Comportamento Espacial:
+                  * Home Range: 2 a 31 km² (machos sobrepõem várias fêmeas).
+                  * Locomoção: Scansorial (habilidade de escalada). Usa o estrato vertical da Araucária/Mata Atlântica, algo que o Graxaim não faz.
+4.3. Puma concolor (Onça-parda) - O Regulador de Topo
+O predador de topo estrutura o ecossistema não apenas através da predação direta, mas através da "Ecologia do Medo".
+Morfologia:
+                  * Massa: 30 a 50 kg (populações subtropicais tendem a ser menores que as andinas/patagônicas).31
+                  * Metabolismo: TMB ~50-60 Watts. FMR (Campo) ~14,5 MJ/dia (aprox. 3.500 kcal/dia).10
+Caça e Energética:
+                  * Custo de Caça: O custo de transporte (COT) é elevado para felinos em terrenos acidentados ou vegetação densa. Falhas na caça são energeticamente custosas.
+                  * Dieta: Preferência por presas grandes (Ozotoceros, Hydrochoerus, ovelhas domésticas), mas suplementa com Cavia ou tatus (Dasypus) se necessário.32
+                  * Frequência: Abate uma presa grande a cada 7-14 dias.
+Paisagem de Medo e Movimento:
+                  * Home Range: Vasto, de 24 a 363 km².33
+                  * Dispersão: Machos subadultos dispersam por centenas de km.34
+                  * Interação com Graxaim: Predação intraguilda. A Onça mata o Graxaim para eliminar competição, forçando o canídeo a evitar áreas de uso intenso da Onça.27
+________________
+5. Arquitetura Computacional e Simulação "MIT-Level"
+Para capturar a complexidade emergente deste sistema, a simulação deve abandonar a abordagem orientada a objetos tradicional (OOP) em favor de uma Arquitetura Orientada a Dados (DOP), utilizando a biblioteca JAX para aceleração em GPU.
+5.1. O Motor de Simulação: JAX e Vetorização
+Em uma simulação com milhares de agentes (ex: 5.000 Cavia, 200 Ozotoceros, 50 Lycalopex, 5 Puma), o overhead do Python é proibitivo.
+Estrutura de Dados (Arrays Estáticos):
+O estado da simulação não é uma lista de objetos, mas um conjunto de tensores imutáveis processados funcionalmente.
+
+
+Python
+
+
+
+
+# Exemplo conceitual de estrutura de dados em JAX
+class EcologicalState(NamedTuple):
+   # Agentes (N, Features)
+   positions: jnp.ndarray      # [x, y]
+   velocities: jnp.ndarray     # [vx, vy]
+   metabolic_reserve: jnp.ndarray # Joules atuais
+   species_id: jnp.ndarray     # Inteiro identificador
+   age: jnp.ndarray            # Idade em 'ticks'
+   
+   # Ambiente (Grid HxWxC)
+   biomass_c4: jnp.ndarray     # Gramíneas de verão
+   biomass_c3: jnp.ndarray     # Gramíneas de inverno
+   cover_density: jnp.ndarray  # Proteção visual
+   scent_map: jnp.ndarray      # Feromônios/Odores (Decaimento temporal)
+
+Otimização para Hardware AMD (ROCm):
+Considerando o hardware alvo (RX 6750 XT), o código deve ser otimizado para o compilador XLA via ROCm.
+                  * jax.vmap: Vetorização automática da função update_agent, permitindo que a GPU processe todos os agentes em paralelo em um único kernel de computação.
+                  * jax.jit: Compilação Just-In-Time de todo o passo de simulação (step_fn), fundindo operações para minimizar o tráfego de memória VRAM.35
+                  * Gestão de Memória: Uso de flags como XLA_PYTHON_CLIENT_PREALLOCATE=false é vital para evitar OOM (Out of Memory) em placas de consumo, permitindo alocação dinâmica conforme a complexidade da cena aumenta.37
+5.2. O Cérebro dos Agentes: Neural Circuit Policies (NCPs)
+Agentes "inteligentes" em simulações ecológicas geralmente usam regras simples (if-then). Para atingir o "nível MIT", implementamos Neural Circuit Policies (NCPs) baseadas em redes neurais de Tempo Contínuo (Liquid Time-Constant - LTC).
+Por que NCPs?
+Inspiradas no conectoma do nematoide C. elegans, as NCPs possuem fiação esparsa e dinâmica temporal intrínseca.
+                  1. Dinâmica Temporal: Os neurônios LTC resolvem Equações Diferenciais Ordinárias (EDOs). Isso significa que o "estado interno" (fome, medo) decai suavemente no tempo, permitindo persistência de comportamento sem a complexidade de LSTMs.38
+                  2. Solução de Forma Fechada (CfC): Para evitar a lentidão de solucionadores de EDO numéricos na simulação, utilizamos a aproximação Closed-form Continuous-time (CfC). Isso permite inferência extremamente rápida, mantendo a expressividade temporal.39
+Implementação do Cérebro:
+                  * Entrada Sensorial: Vetor local de biomassa, gradiente de cheiro de predador, coespecíficos visíveis.
+                  * Neurônios Intermediários: Processam o conflito "Fome vs. Medo". A dinâmica líquida permite que o medo "persista" após o predador sair do campo visual.
+                  * Saída Motora: Vetor de aceleração contínua.
+5.3. Memória Episódica: Bancos de Dados Vetoriais
+Para simular aprendizado e memória espacial ("Vi um puma perto do rio ontem"), integramos um sistema de RAG (Retrieval-Augmented Generation) simplificado.
+                  * Vector DB (ChromaDB/Faiss): Eventos significativos (ataques, fontes ricas de alimento) são codificados em embeddings e armazenados localmente.
+                  * Consulta: A cada n passos, o agente consulta o banco com seu contexto atual. Se memórias relevantes (alta similaridade de cosseno) são recuperadas, elas modulam a NCP (ex: inibindo movimento em direção a uma área perigosa lembrada).41
+________________
+6. Dinâmica de Interação e Equações Governantes
+A simulação é regida por um sistema de equações diferenciais acopladas, resolvidas discretamente a cada tick.
+6.1. Equações de Predação (Resposta Funcional)
+Utilizamos uma resposta funcional de Holling Tipo II generalizada para o Puma e Tipo III para o Graxaim.
+Para o Graxaim (Predador Generalista):
+  
+
+O termo quadrático (  ) simula a mudança de foco (prey switching). Quando a densidade do Preá (  ) é baixa, o Graxaim ignora-o (foca em frutas). Quando    sobe, o Graxaim "aprende" a caçá-lo eficientemente. Isso estabiliza a população de presas.
+6.2. Equação de Movimento e Custo Energético
+  
+
+                  *   : Eficiência digestiva (variável com a estação: 0,65 verão / 0,40 inverno).
+                  *   : Custo de Transporte alométrico (  ).
+                  * Se   , o agente morre (inanição).
+                  * Se   , o agente pode clonar-se (reprodução assexuada na simulação simplificada ou busca de parceiro na complexa).
+________________
+7. Conclusão e Insights de Segunda Ordem
+A integração destes dados revela dinâmicas que não são óbvias em modelos mais simples:
+                     1. O Paradoxo do Inverno: A sobrevivência do Veado-campeiro não depende apenas de fugir do Puma, mas da eficiência de forrageamento no inverno. A simulação provavelmente mostrará que a pressão de predação se torna mais letal no inverno não porque os Pumas caçam mais, mas porque os Veados precisam se expor mais e mover-se mais (aumentando o COT) para encontrar energia digestível, entrando em zonas de risco.
+                     2. O Papel da Jaguatirica: A inclusão da Jaguatirica (Leopardus pardalis) cria uma pressão intensa nos micro-habitats florestais. Isso empurra o Preá para o campo aberto, onde ele se torna vulnerável ao Graxaim e aves de rapina, demonstrando como predadores florestais subsidiam predadores campestres.
+                     3. Resiliência via Omnivoria: O modelo demonstrará que o Graxaim é o agente mais resiliente do sistema. Sua capacidade de alternar para frutos (Syagrus) quando a biomassa de roedores colapsa impede cascatas de extinção trófica, atuando como um amortecedor sistêmico.
+Esta especificação fornece a base completa — dos joules da grama aos tensores da GPU — para construir uma simulação ecológica de ponta do Sul do Brasil.
+Referências citadas
+                     1. Sustainability in Natural Grassland in the Brazilian Pampa Biome: Livestock Production with CO 2 Absorption - MDPI, acessado em fevereiro 10, 2026, https://www.mdpi.com/2071-1050/16/9/3672
+                     2. Sustainability in Natural Grassland in the Brazilian Pampa Biome: Livestock Production with CO2 Absorption - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/380204355_Sustainability_in_Natural_Grassland_in_the_Brazilian_Pampa_Biome_Livestock_Production_with_CO2_Absorption
+                     3. (PDF) Adaptive Grazing of Native Grasslands Provides Ecosystem Services and Reduces Economic Instability for Livestock Systems in the Flooding Pampa, Argentina - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/380670804_Adaptive_Grazing_of_Native_Grasslands_Provides_Ecosystem_Services_and_Reduces_Economic_Instability_for_Livestock_Systems_in_the_Flooding_Pampa_Argentina
+                     4. Native Grasslands at the Core: A New Paradigm of Intensification for the Campos of Southern South America to Increase Economic and Environmental Sustainability - Frontiers, acessado em fevereiro 10, 2026, https://www.frontiersin.org/journals/sustainable-food-systems/articles/10.3389/fsufs.2021.547834/full
+                     5. Feed Intake, acessado em fevereiro 10, 2026, https://animalnutrition.org/sites/default/files/2022-01/Feed%20Intake.pdf
+                     6. The Use of Fire Radiative Power to Estimate the Biomass Consumption Coefficient for Temperate Grasslands in the Atlantic Forest Biome - SciELO, acessado em fevereiro 10, 2026, https://www.scielo.br/j/rbmet/a/xnfVLYrQ9VZRD6x73xHRTqJ/?format=pdf&lang=en
+                     7. Patterns and Controls of the Latent and Sensible Heat Fluxes in the Brazilian Pampa Biome, acessado em fevereiro 10, 2026, https://www.mdpi.com/2073-4433/13/1/23
+                     8. Energetics and fear of humans constrain the spatial ecology of pumas - PMC, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC7865164/
+                     9. The Zoogeography of Mammalian Basal Metabolic Rate | The American Naturalist: Vol 156, No 2, acessado em fevereiro 10, 2026, https://www.journals.uchicago.edu/doi/10.1086/303383
+                     10. Assessment of behavioral energetics model on Puma concolor using doubly labeled water, acessado em fevereiro 10, 2026, https://utoronto.scholaris.ca/server/api/core/bitstreams/a668341c-27c7-4b74-a6ba-0d0fe84a39bb/content
+                     11. Effective limb length and the scaling of locomotor cost in terrestrial animals - umdberg / BERG FrontPage, acessado em fevereiro 10, 2026, http://umdberg.pbworks.com/f/Pontzer2007costoflocomotion.pdf
+                     12. Effective limb length and the scaling of locomotor cost in terrestrial animals - PubMed, acessado em fevereiro 10, 2026, https://pubmed.ncbi.nlm.nih.gov/17488938/
+                     13. Scaling of visual acuity with body size in mammals and birds - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/229594334_Scaling_of_visual_acuity_with_body_size_in_mammals_and_birds
+                     14. Ontogeny of running performance in the wild guinea pig (Cavia aperea) - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/223215003_Ontogeny_of_running_performance_in_the_wild_guinea_pig_Cavia_aperea
+                     15. Brazilian guinea pig - Wikipedia, acessado em fevereiro 10, 2026, https://en.wikipedia.org/wiki/Brazilian_guinea_pig
+                     16. A theoretical approach to energy requirements in guinea pigs (Cavia porcellus) - scielo.sa.cr, acessado em fevereiro 10, 2026, https://www.scielo.sa.cr/scielo.php?script=sci_abstract&pid=S1659-13212024000100041&lng=en&nrm=iso
+                     17. Shifts in energy allocation and reproduction in response to temperature in a small precocial mammal - PMC, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC10583357/
+                     18. Age at maturity in cavies and guinea-pigs (Cavia aperea and Cavia aperea f. porcellus): Influence of social factors | Request PDF - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/229928434_Age_at_maturity_in_cavies_and_guinea-pigs_Cavia_aperea_and_Cavia_aperea_f_porcellus_Influence_of_social_factors
+                     19. Role of diet selection in the use of habitat by pampas cavies Cavia aperea pamparum (Mammalia, Rodentia) - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/249943690_Role_of_diet_selection_in_the_use_of_habitat_by_pampas_cavies_Cavia_aperea_pamparum_Mammalia_Rodentia
+                     20. Veado-campeiro – Wikipédia, a enciclopédia livre, acessado em fevereiro 10, 2026, https://pt.wikipedia.org/wiki/Veado-campeiro
+                     21. Pampas deer (Ozotoceros bezoarticus) longevity, ageing, and life history, acessado em fevereiro 10, 2026, https://genomics.senescence.info/species/entry.php?species=Ozotoceros_bezoarticus
+                     22. Ozotoceros bezoarticus (Pampas deer) | INFORMATION - Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Ozotoceros_bezoarticus/
+                     23. (PDF) Lycalopex Gymnocercus (Carnivora: Canidae) - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/228986969_Lycalopex_Gymnocercus_Carnivora_Canidae
+                     24. Lycalopex gymnocercus (pampas fox) | INFORMATION - Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Lycalopex_gymnocercus/
+                     25. Dieta del zorro gris pampeano (Lycalopex gymnocercus) en la provincia de Buenos Aires, acessado em fevereiro 10, 2026, https://www.scielo.org.ar/scielo.php?script=sci_arttext&pid=S0327-93832016000200012
+                     26. Trophic ecology of Cerdocyon thous and Lycalopex gymnocercus within the Iberá Ecoregion in Argentina - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/400313017_Trophic_ecology_of_Cerdocyon_thous_and_Lycalopex_gymnocercus_within_the_Ibera_Ecoregion_in_ArgentinaEcologia_trofica_y_comportamiento_alimentario_de_Cerdocyon_thous_y_Lycalopex_gymnocercus_en_humedale
+                     27. The Pampas Fox (Lycalopex gymnocercus, 'Zorro Gris Pampeano'): An Integrative Review of the Ecological, Health, and Conflict Roles of a Key Mesopredator in Southern South America - MDPI, acessado em fevereiro 10, 2026, https://www.mdpi.com/3042-4526/2/4/49
+                     28. Diet of Adults and Cubs of Lycalopex gymnocercus in Pampas Grassland: A Validation of the Optimal Foraging Theory? - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/232691779_Diet_of_Adults_and_Cubs_of_Lycalopex_gymnocercus_in_Pampas_Grassland_A_Validation_of_the_Optimal_Foraging_Theory
+                     29. Leopardus pardalis (ocelot) | INFORMATION | Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Leopardus_pardalis/
+                     30. Ocelot (Leopardus pardalis) longevity, ageing, and life history, acessado em fevereiro 10, 2026, https://genomics.senescence.info/species/entry.php?species=Leopardus_pardalis
+                     31. Living Species - Puma | IUCN CatSG, acessado em fevereiro 10, 2026, https://www.catsg.org/living-species-puma
+                     32. Deforestation leads to prey shrinkage for an apex predator in a biodiversity hotspot - LERF – Laboratório de Ecologia e Restauração Florestal, acessado em fevereiro 10, 2026, https://lerf.eco.br/img/publicacoes/Magioli-Ferraz2021_Article_DeforestationLeadsToPreyShrink.pdf
+                     33. Habitat use and activity patterns of Puma concolor in a human-dominated landscape of central Argentina - Oxford Academic, acessado em fevereiro 10, 2026, https://academic.oup.com/jmammal/article/100/1/202/5299191
+                     34. Movement data for Puma 1. | Download Scientific Diagram - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/figure/Movement-data-for-Puma-1_fig1_232275285
+                     35. Getting AMD ROCm Working on the RX 6750 XT (Ubuntu 22.04) - Sander van Dragt's Notes, acessado em fevereiro 10, 2026, https://vandragt.com/getting-amd-rocm-working-on-the-rx-6750-xt-ubuntu-22-04-
+                     36. FLAIROx/JaxMARL: Multi-Agent Reinforcement Learning ... - GitHub, acessado em fevereiro 10, 2026, https://github.com/flairox/jaxmarl
+                     37. GPU memory allocation - JAX documentation, acessado em fevereiro 10, 2026, https://docs.jax.dev/en/latest/gpu_memory_allocation.html
+                     38. Neural Circuit Policy (NCP) Overview - Emergent Mind, acessado em fevereiro 10, 2026, https://www.emergentmind.com/topics/neural-circuit-policy-ncp
+                     39. Closed-form Continuous-time Neural Networks arXiv:2106.13898v2 [cs.LG] 2 Mar 2022, acessado em fevereiro 10, 2026, https://arxiv.org/pdf/2106.13898
+                     40. [PDF] Closed-form continuous-time neural networks - Semantic Scholar, acessado em fevereiro 10, 2026, https://www.semanticscholar.org/paper/Closed-form-continuous-time-neural-networks-Hasani-Lechner/bede03767c8e0ec9551bb7374458d518ffc4635c
+                     41. RAG-Driven Memory Architectures in Conversational LLMs—A Literature Review With Insights Into Emerging Agriculture Data, acessado em fevereiro 10, 2026, https://www.vliz.be/imisdocs/publications/417102.pdf
+                     42. Top 7 Open-Source Vector Databases: Faiss vs. Chroma & More - AIMultiple research, acessado em fevereiro 10, 2026, https://research.aimultiple.com/open-source-vector-databases/
