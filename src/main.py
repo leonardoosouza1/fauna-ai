@@ -146,7 +146,6 @@ def create_initial_population(num_agents: int, rng_seed: int = 42) -> list[Genom
             num_command_neurons=8,
             plasticity_rate=0.01,
             sensor_range=15.0,
-            rng_seed=rng_seed + i,
         )
         genomes.append(g)
     return genomes
@@ -283,8 +282,14 @@ def run_evolution(
     Returns:
         new_genomes, generation_stats, rng
     """
-    # Calcular fitness
-    fitness = compute_fitness(energies, ages, is_active)
+    num_genomes = len(genomes)
+
+    # Calcular fitness apenas para os agentes com genoma
+    fitness = compute_fitness(
+        energies[:num_genomes],
+        ages[:num_genomes],
+        is_active[:num_genomes],
+    )
     generation_number = len(genomes)
 
     # Log stats
