@@ -2,7 +2,9 @@
 # Para GPU AMD ROCm: instalar jax-rocm em vez de jax[cpu]
 # pip install jax[rocm] -f https://storage.googleapis.com/jax-releases/jax_rocm_releases.html
 
-jax[cpu]>=0.4.20
+# jax[cpu]>=0.4.20  # Comentado para usar versão do container ROCm
+# jax==0.4.35       # Comentado para usar versão do container ROCm
+# jaxlib==0.4.35    # Comentado para usar versão do container ROCm
 flax>=0.8.0
 optax>=0.1.7
 chex>=0.1.8

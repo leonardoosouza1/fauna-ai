@@ -1,0 +1,256 @@
+﻿Parâmetros Biológicos e Ecológicos Integrados para Simulação da Fauna Brasileira: Uma Síntese Computacional para os Biomas Amazônia, Cerrado e Caatinga
+1. Introdução e Enquadramento Teórico
+A modelagem de ecossistemas neotropicais exige uma transição paradigmática da representação visual estática para a simulação dinâmica baseada em física biológica. O desenvolvimento de agentes autônomos que repliquem com fidelidade o comportamento da fauna nas regiões Norte (Amazônia), Centro-Oeste (Cerrado) e Nordeste (Caatinga) do Brasil requer a integração de variáveis fisiológicas granulares — como taxas metabólicas basais (TMB), biomecânica de locomoção, campos sensoriais e energétic — com as restrições abióticas impostas por estes biomas distintos. Este relatório técnico compila e sintetiza dados empíricos robustos para fundamentar a arquitetura de tais simulações, preenchendo a lacuna entre a ecologia teórica e a implementação computacional de alto desempenho.
+A base teórica desta análise repousa sobre a Teoria Metabólica da Ecologia (MTE) e a Lei de Kleiber, que postulam que a taxa metabólica (  ) escala com a massa corporal (  ) seguindo a potência de   .1 No entanto, a fauna neotropical apresenta desvios alométricos significativos, adaptações evolutivas à dissipação de calor, à escassez de nutrientes em solos oligotróficos e à conservação hídrica extrema. Por exemplo, a depressão metabólica observada em xenartros (preguiças, tamanduás) e em mamíferos aquáticos como o peixe-boi-da-amazônia (Trichechus inunguis) desafia as constantes universais, exigindo parâmetros ajustados para evitar a morte prematura de agentes em simulações de longo prazo.3
+Além dos parâmetros biológicos, este relatório aborda a arquitetura computacional necessária para processar essas interações em escala. A complexidade das redes tróficas e a necessidade de tomada de decisão em tempo contínuo sugerem o uso de Políticas de Circuito Neural (Neural Circuit Policies - NCPs) e Redes Neurais Líquidas (LNNs), executadas sobre hardware acelerado (como JAX em arquiteturas GPU), para capturar a fluidez do comportamento animal que modelos discretos tradicionais falham em reproduzir.5
+________________
+2. A Física do Ambiente: Restrições Abióticas e Cenários Energéticos
+Para que agentes biológicos operem de maneira realista, o ambiente virtual deve impor as mesmas pressões seletivas encontradas na natureza. As regiões alvo deste estudo — Amazônia, Cerrado e Caatinga — funcionam como filtros fisiológicos distintos que ditam as estratégias de sobrevivência.
+2.1 Amazônia (Região Norte): Estratificação Vertical e Pulso de Inundação
+A floresta amazônica é definida por sua alta Produtividade Primária Líquida (NPP), mas também por uma severa estratificação vertical e sazonalidade hidrológica. A distribuição de biomassa não é uniforme; medições de sensoriamento remoto e inventários florestais indicam que a biomassa viva acima do solo (AGLB) na Amazônia Central e nas Guianas frequentemente excede 300 Mg/ha, enquanto florestas de transição nas bordas sul e noroeste variam entre 100 e 200 Mg/ha.7
+Esta biomassa, contudo, está majoritariamente trancada no dossel, a dezenas de metros do solo. Isso impõe uma restrição crítica para a simulação: herbívoros terrestres estritos, como a anta (Tapirus terrestris) e o queixada (Tayassu pecari), dependem fundamentalmente da "chuva de recursos" — a queda de frutos e sementes — ou da vegetação de sub-bosque, que é menos produtiva devido à limitação de luz.8 A simulação deve, portanto, modelar a gravidade e a fenologia de frutificação como vetores de energia descendente.
+O pulso de inundação é outro determinante abiótico. A variação sazonal do nível dos rios força a fauna terrestre a migrações laterais para áreas de terra firme. Agentes simulados de onças-pintadas (Panthera onca) em ambientes de várzea devem possuir a capacidade de transição comportamental para a vida semiarbórea ou aquática durante as cheias, um comportamento documentado onde esses predadores permanecem nas copas das árvores ou nadam entre ilhas de floresta por meses.9
+2.2 Cerrado (Região Centro-Oeste): O Mosaico Energético e o Fogo
+O Cerrado, uma savana tropical, apresenta um desafio energético diferente. Ao contrário da Amazônia, uma proporção imensa da biomassa vegetal (até 70%) é subterrânea, uma adaptação evolutiva ao fogo recorrente e à herbivoria. A biomassa arbórea aérea em áreas de cerrado sensu stricto é estimada em cerca de 63 Mg/ha, com biomassa subterrânea de 37,5 Mg/ha.10 Para a simulação, isso significa que a "verrdividade" visual do cenário não se traduz diretamente em alimento disponível para todos os herbívoros; muitos recursos estão ocultos como xilopódios e tubérculos, acessíveis apenas a especialistas em escavação ou forrageamento subterrâneo.
+A sazonalidade no Cerrado cria gargalos nutricionais. Durante a estação seca, recursos chave como a fruta da Lobeira (Solanum lycocarpum) tornam-se essenciais. A Lobeira atua como um "recurso de sustentação" para a fauna, especialmente para o lobo-guará (Chrysocyon brachyurus). Em termos de modelagem, a Lobeira não deve ser tratada apenas como uma fonte de calorias, mas como um item terapêutico e hidratante que altera o estado de saúde dos agentes, prevenindo a inanição e combatendo parasitas renais.12
+2.3 Caatinga (Região Nordeste): A Economia da Água
+A Caatinga impõe o filtro fisiológico mais rigoroso: a escassez hídrica. A produtividade deste bioma é altamente pulsada pela chuva. Em anos de seca, a produção de biomassa forrageira pode cair drasticamente, variando de 618 a 1427 kg de matéria seca por hectare dependendo da precipitação.14 O Balanço Líquido do Ecossistema (NEE) indica que a Caatinga atua como sumidouro de carbono mesmo na seca, mas a disponibilidade de energia para herbívoros torna-se crítica.15
+Para a simulação, a variável "Hidratação" torna-se o vetor primário de mortalidade. Agentes na Caatinga devem possuir algoritmos de busca de água que priorizem recursos como o cacto Xique-xique (Pilosocereus gounellei). Este cacto não é apenas alimento; é um reservatório hídrico fundamental. A remoção de espinhos (por fogo natural ou ação antrópica) ou a tolerância à dor devem ser fatores limitantes para o acesso a esse recurso. Além disso, a termorregulação comportamental é mandatória: agentes como o Mocó (Kerodon rupestris) e a Suçuarana (Puma concolor) restringem sua atividade aos períodos crepusculares ou noturnos para minimizar a perda de água evaporativa, uma adaptação que deve ser codificada nas rotinas de atividade diária dos agentes.16
+________________
+3. Parâmetros Biológicos da Megafauna: Predadores de Topo
+A simulação de predadores exige precisão biomecânica para que as interações de caça (perseguição, emboscada, fuga) sejam emergentes e realistas, não scriptadas.
+3.1 Panthera onca (Onça-pintada)
+Como o maior felino das Américas, a onça-pintada exerce controle top-down sobre as populações de presas. Seus parâmetros variam geograficamente, sendo os indivíduos da planície pantaneira e amazônica geralmente mais robustos que os da Caatinga.
+* Massa e Alometria: Machos adultos variam de 41 a 102 kg, com dimorfismo sexual acentuado.18 A massa deve influenciar diretamente a inércia e o custo metabólico de movimento na simulação.
+* Biomecânica de Caça: Ao contrário de felinos cursoriais, a onça é construída para força bruta e explosão. Sua velocidade máxima atinge aproximadamente 80 km/h (50 mph) em tiros curtos, mas sua capacidade de aceleração é o fator crítico, permitindo a captura de presas antes que atinjam velocidade de fuga.19
+* Adaptação Aquática: A onça é um nadador obrigado em ambientes de várzea. Em termos de custo de transporte (COT), a natação deve ser penalizada menos para onças do que para pumas ou lobos-guará. Elas predam ativamente nos rios, visando jacarés e capivaras.9
+* Metabolismo: A taxa metabólica de campo (FMR) é elevada devido à massa muscular densa. Estimativas alométricas sugerem uma demanda de 2.500 a 3.000 kcal/dia, mas sua ecologia alimentar é de "banquete ou fome", consumindo grandes quantidades (até 25 kg) de uma só vez e jejuando posteriormente.
+* Comportamento em Paisagens Antrópicas: Em áreas de alta perturbação humana, onças tornam-se estritamente noturnas e reduzem sua área de vida, evitando assentamentos mas explorando gado se a densidade de presas naturais for baixa.21
+3.2 Puma concolor (Suçuarana / Puma)
+A suçuarana é o "corretor de energia" do ecossistema, ocupando nichos que a onça ignora ou domina.
+* Agilidade Vertical: A capacidade de salto vertical (> 5 metros) e horizontal (> 10 metros) da suçuarana é superior à da onça. Isso permite que agentes puma explorem terrenos acidentados, como os cânions da Caatinga ou áreas montanhosas, usando a topografia para fuga e emboscada.16
+* Partição de Nicho: Existe uma forte segregação temporal e espacial onde as duas espécies coexistem. Estudos mostram um coeficiente de sobreposição temporal (  ) entre 0,69 e 0,77, indicando que, embora ambos sejam ativos à noite, pumas ajustam seus horários ou micro-hábitats para evitar encontros letais com onças.23 Na simulação, agentes puma devem possuir um "vetor de medo" que os repele de áreas marcadas olfativamente por onças.25
+* Adaptação à Aridez: Na Caatinga, a suçuarana exibe alta plasticidade fisiológica, concentrando urina e reduzindo atividade diurna para conservar água, o que lhe permite persistir em áreas onde a onça, mais dependente de água, não consegue.26
+3.3 Harpia harpyja (Gavião-real)
+O predador aéreo do dossel amazônico opera sob regras físicas distintas.
+   * Aerodinâmica: Com envergadura de até 2 metros, suas asas são largas e curtas em proporção ao corpo (carga alar alta), adaptadas para manobrabilidade em ambientes florestais densos (clutter), não para planeio sustentado em áreas abertas. O voo é energeticamente custoso; portanto, a harpia adota a estratégia de "sentar e esperar" (sit-and-wait), permanecendo empoleirada por até 23 horas para conservar energia.27
+   * Campo Visual (Dado Crítico): A harpia possui um campo binocular relativamente estreito (~28,5°) e uma área cega traseira massiva (109,5°), a maior registrada para rapinantes diurnos.28 Isso indica uma especialização em ataques frontais focados, sem a necessidade de vigilância antipredatória (pois é o topo da cadeia). Na simulação, o cone de visão da harpia deve ser estreito e focado, exigindo que o agente mova a cabeça ativamente para escanear o ambiente.
+   * Aceleração de Ataque: Capaz de atingir 80 km/h em mergulhos curtos através do dossel para arrebatar preguiças e macacos.27
+________________
+4. Mesopredadores: Especialistas e Generalistas
+4.1 Chrysocyon brachyurus (Lobo-guará)
+O maior canídeo da América do Sul é um bioindicador vital do Cerrado.
+   * Biomecânica do Passo: O lobo-guará utiliza uma marcha de "passo" (pacing), movendo as duas pernas do mesmo lado simultaneamente. Isso é energeticamente eficiente para cobrir grandes distâncias em vegetação alta (capim), mas limita sua capacidade de aceleração e curvas fechadas em alta velocidade comparado a felinos ou canídeos cursoriais como o Lycaon.29 Agentes simulados devem ter alta stamina mas baixa agilidade.
+   * Ecologia Nutricional: É um onívoro funcional (50% vegetal, 50% animal). A dependência da Lobeira (Solanum lycocarpum) é fisiológica; a planta atua como vermífugo natural contra o nematoide gigante renal (Dioctophyme renale). Em cativeiro, dietas ricas em proteína animal causam cistinúria (cálculos renais), muitas vezes fatal. A simulação deve penalizar a saúde de agentes Lobo-guará que consumam excesso de carne sem a contrapartida da Lobeira.12
+4.2 Leopardus wiedii (Gato-maracajá)
+O especialista arbóreo.
+   * Locomotion e Anatomia: Possui adaptação única de rotação de 180° nos tornozelos traseiros, permitindo descer troncos de cabeça para baixo — uma habilidade crítica para caçar e fugir em extratos verticais.
+   * Custo Energético: Estudos sugerem que para mamíferos desse porte (3-4 kg), a escalada vertical é metabolicamente custosa, mas essencial para evitar a predação intraguilda por jaguatiricas (Leopardus pardalis), que são maiores e dominam o solo.33
+   * Metabolismo: A TMB é de aproximadamente 5,2 Watts. A atividade é estritamente noturna em áreas com predadores diurnos/crepusculares.34
+4.3 Leopardus tigrinus (Gato-do-mato-pequeno / Oncilla)
+   * Plasticidade na Caatinga: Em ambientes semiáridos, onde predadores maiores podem estar ausentes ou em baixa densidade, a oncilla expande seu nicho, tornando-se mais diurna para caçar lagartos e pequenos roedores ativos durante o dia. Essa flexibilidade comportamental (catemeralidade) é uma resposta direta à liberação competitiva e deve ser modelada como uma variável dependente da presença de Puma e Leopardus pardalis.36
+________________
+5. Herbívoros e Engenheiros do Ecossistema
+5.1 Tapirus terrestris (Anta Brasileira)
+O "jardineiro da floresta".
+   * Metabolismo e Digestão: Como fermentadora posterior (hindgut fermenter), a anta é menos eficiente na extração de nutrientes por unidade de alimento do que os ruminantes, mas processa volumes maiores mais rapidamente. Isso a obriga a ser uma "máquina de fluxo de biomassa", consumindo grandes quantidades de fibra e frutos.31
+   * Dispersão de Sementes: Estudos mostram que antas dispersam sementes a grandes distâncias (>1 km), com tempos de retenção intestinal longos. Um único indivíduo pode carregar 122 espécies diferentes de sementes. Na simulação, agentes Anta devem funcionar como vetores estocásticos de reflorestamento, depositando sementes viáveis em novas células da grade.39
+   * Vulnerabilidade Reprodutiva: O ciclo reprodutivo é extremamente lento (gestação de ~13 meses, um filhote, intervalo entre partos longo). Isso torna a população virtual muito sensível a taxas de mortalidade adicionais (caça, atropelamento). A recuperação populacional em simulações deve ser calibrada para ser lenta.18
+5.2 Tayassu pecari (Queixada)
+   * Dinâmica de Bando: Vivem em manadas massivas (50 a >300 indivíduos). A simulação não pode tratar queixadas como indivíduos isolados; eles operam como um "super-organismo" ou boid. A defesa coletiva é eficaz contra onças; um bando coeso pode repelir ou até matar um predador.42
+   * Nomadismo: Percorrem até 10 km/dia, rastreando eventos de frutificação em larga escala. Eles não possuem território fixo, mas sim uma área de vida flutuante que pode cobrir 200 km².44
+   * Engenharia: O comportamento de chafurdar (wallowing) cria poças e altera a topografia do solo, criando micro-hábitats para anfíbios e insetos.
+5.3 Dasyprocta spp. (Cutia) e Cuniculus paca (Paca)
+   * Interação com Castanha-do-Pará: As cutias são os únicos animais capazes de abrir eficientemente o ouriço da Castanheira (Bertholletia excelsa) e, crucialmente, praticam o scatter-hoarding (enterrar sementes para consumo posterior). Sementes esquecidas germinam. Sem o agente Cutia, o agente Castanheira não deve conseguir se reproduzir efetivamente na simulação.46
+   * Paca: Maior e noturna, a paca é um frugívoro que depende de sementes caídas e possui alta taxa de crescimento (precocidade), atingindo maturidade sexual cedo, o que sustenta a biomassa de predadores.47
+5.4 Kerodon rupestris (Mocó)
+   * Especialista da Caatinga: Endêmico de afloramentos rochosos (lajedos).
+   * Visão: Seus olhos são adaptados para visão mesópica (meia-luz), com alta sensibilidade mas baixa resolução, ideal para detectar predadores no crepúsculo.
+   * Fidelidade ao Habitat: Agentes Mocó devem ser "ancorados" a ativos de rocha na simulação. O risco de predação aumenta exponencialmente à medida que se afastam do refúgio rochoso (>50m) para forragear.17
+________________
+6. A Paisagem Energética: Parâmetros Botânicos
+A simulação requer valores calóricos precisos para fechar o balanço energético dos agentes.
+Tabela 6.1: Valor Nutricional de Espécies-Chave
+
+
+Espécie Vegetal
+	Bioma Principal
+	Densidade Calórica
+	Composição Principal
+	Função Ecológica na Simulação
+	Lobeira (Solanum lycocarpum)
+	Cerrado
+	Baixa (~57 kcal/100g)
+	Carbo (11%), Fibra (23%)
+	Recurso de sobrevivência (seca); Vermífugo para Lobo-guará 12
+	Castanha-do-Brasil (Bertholletia excelsa)
+	Amazônia
+	Altíssima (~650 kcal/100g)
+	Gordura (66%), Proteína (14%)
+	"Bomba calórica"; Dependente de Cutias para acesso/dispersão 46
+	Xique-xique (Pilosocereus gounellei)
+	Caatinga
+	Baixa (Foco Hídrico)
+	Água, Minerais, Fibra Solúvel
+	Fonte crítica de água na seca; Requer remoção de espinhos/tolerância 50
+	Gramíneas Aquáticas (Paspalum spp.)
+	Amazônia (Rios)
+	Média
+	Celulose, Sílica
+	Dieta base para Peixe-boi; Desgaste dentário 51
+	________________
+7. Arquitetura Computacional e Implementação da Simulação
+Para capturar a complexidade descrita acima, a arquitetura de software deve ir além das máquinas de estados finitos (FSM) comuns em jogos. Recomenda-se uma abordagem baseada em Differentiable Physics e Neurociência Computacional.
+7.1 Cérebros dos Agentes: Neural Circuit Policies (NCPs)
+Em vez de grandes redes neurais do tipo "caixa preta", o uso de Neural Circuit Policies (NCPs) é altamente recomendado. NCPs são redes esparsas inspiradas no sistema nervoso do nematoide C. elegans.
+   * Vantagem de Eficiência: Um agente veicular autônomo pode ser controlado por uma NCP com apenas 19 neurônios, em contraste com milhares em uma rede profunda tradicional. Isso permite simular milhares de agentes (onças, antas, cutias) simultaneamente em uma única GPU com baixo custo computacional.6
+   * Estrutura de 4 Camadas:
+   1. Sensorial: Entrada de vetores (Fome, Cheiro, Visão).
+   2. Interneurônios: Processamento e modulação.
+   3. Comando: Decisão de alto nível (Fugir, Atacar).
+   4. Motor: Ação física (Aceleração, Curva).
+7.2 Dinâmica Temporal: Closed-form Continuous-time (CfC)
+O comportamento animal não ocorre em passos de tempo discretos e rígidos. Redes Neurais Líquidas (LNNs) utilizam equações diferenciais ordinárias (ODEs) para modelar o estado oculto dos neurônios, permitindo adaptação a entradas que variam no tempo. No entanto, resolver ODEs é lento.
+   * Solução: O modelo Closed-form Continuous-time (CfC) aproxima a solução dessas ODEs numa forma fechada. Isso mantém a capacidade adaptativa (constantes de tempo "líquidas" que mudam com o input) mas com a velocidade de inferência de uma rede recorrente (RNN) padrão. É ideal para simular a transição suave entre "dormindo" e "fugindo" quando uma presa detecta um predador.53
+7.3 Stack Tecnológico: JAX e ROCm
+Para execução em larga escala, especialmente considerando o hardware AMD (como a RX 6750 XT mencionada nos snippets de benchmarking):
+   * JAX: Biblioteca Python para computação numérica de alto desempenho. Suporta jit (compilação Just-In-Time) e vmap (vetorização automática), permitindo simular a física e a "mente" de milhares de agentes em paralelo.
+   * ROCm (Radeon Open Compute): A plataforma aberta da AMD para computação em GPU. Versões recentes do JAX possuem suporte (ainda que experimental ou via Docker containers específicos) para ROCm, permitindo que pesquisadores utilizem GPUs de consumo (como a série RX 6000/7000) para rodar essas simulações biológicas complexas, democratizando o acesso à modelagem ecológica de alta fidelidade.55
+7.4 Memória dos Agentes: Bancos de Dados Vetoriais
+Para que os agentes "aprendam" e "lembrem" (memória episódica), integra-se um banco de dados vetorial (como Redis ou soluções baseadas em pgvector).
+   * Aplicação: As experiências passadas do agente (ex: "encontrei água aqui na última seca") são convertidas em embeddings e armazenadas. Quando o agente experimenta um estado similar (sede + seca), ele consulta essa memória vetorial para tomar decisões informadas pelo passado, simulando a aprendizagem espacial e temporal observada em espécies como o Caititu e a Anta.56
+________________
+8. Tabelas de Dados Consolidados para Implementação
+Tabela 8.1: Parâmetros Metabólicos e de Locomoção
+Espécie
+	Massa (kg)
+	TMB Estimada (kcal/dia)*
+	Velocidade Max (km/h)
+	Custo de Transporte
+	Observações Fisiológicas
+	Panthera onca
+	60–100
+	2.500–3.000
+	80 (Explosão)
+	Alto (Anaeróbico)
+	Força de mordida extrema; nada bem.
+	Puma concolor
+	30–80
+	1.800–2.200
+	70–80
+	Médio (Eficiente)
+	Saltador; urina concentrada (Caatinga).
+	Chrysocyon brachyurus
+	20–30
+	700–900
+	40–50
+	Baixo (Passo)
+	Requer Lobeira; pouca agilidade.
+	Tapirus terrestris
+	150–250
+	4.000–5.000
+	30
+	Alto (Arrasto)
+	Fermentador posterior; requer água.
+	Tayassu pecari
+	25–40
+	800–1.100
+	35
+	Médio
+	Nômade; defesa em grupo.
+	Trichechus inunguis
+	300–500
+	~1.500 (36% do esperado)
+	15-20 (Nado)
+	Baixo (Flutuabilidade)
+	Metabolismo deprimido; jejum prolongado.
+	*TMB ajustada para realidades neotropicais (ex: peixe-boi).
+Tabela 8.2: Parâmetros Sensoriais e Cognitivos
+Espécie
+	Campo Visual Binocular
+	Ponto Cego (Traseiro)
+	Prioridade Sensorial
+	Lógica de Decisão (NCP)
+	Harpia harpyja
+	Estreito (~28,5°)
+	Massivo (109,5°)
+	Visão (Agudeza)
+	Sniper: Estático -> Ataque Fulminante
+	Panthera onca
+	Médio (~120°)
+	Médio
+	Olfato/Visão/Auditivo
+	Emboscada: Ocultação -> Explosão
+	Tapirus terrestris
+	Baixo (Lateralizado)
+	Pequeno
+	Olfato (Probóscide)
+	Navegador: Mapeamento de recursos/água
+	Kerodon rupestris
+	Baixo (Periférico)
+	Mínimo
+	Visão (Crepuscular)
+	Sentinela: Refúgio <-> Forrageio (Risco)
+	________________
+9. Conclusão
+A simulação da fauna brasileira nos biomas Centro-Oeste, Norte e Nordeste não pode ser realizada com modelos genéricos. A verticalidade da Amazônia, a sazonalidade pirofítica do Cerrado e a restrição hídrica da Caatinga exigem agentes com parâmetros biológicos ajustados e arquiteturas de decisão robustas.
+Ao integrar os dados fisiológicos detalhados (como a visão da Harpia e o metabolismo do Peixe-boi) com tecnologias computacionais avançadas (NCPs, CfCs, JAX/ROCm), é possível criar um "gêmeo digital" desses ecossistemas que responda de forma realista a perturbações, oferecendo uma ferramenta poderosa para conservação, pesquisa ecológica e previsão de cenários climáticos futuros. A chave para o realismo não está apenas na aparência dos animais, mas na fidelidade das regras termodinâmicas e comportamentais que regem suas vidas virtuais.
+Referências citadas
+   1. Basal metabolic rate and maternal energetic investment durations in mammals - PMC - NIH, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC4177257/
+   2. Kleiber's law - Wikipedia, acessado em fevereiro 10, 2026, https://en.wikipedia.org/wiki/Kleiber%27s_law
+   3. Metabolism and Respiration of the Amazonian Manatee (Trichechus inunguis), acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/290718908_Metabolism_and_Respiration_of_the_Amazonian_Manatee_Trichechus_inunguis
+   4. What are the Metabolic Rates of Marine Mammals and What Factors Impact this Value: A review - PubMed Central, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC10545007/
+   5. Accuracy, Memory Efficiency and Generalization: A Comparative Study on Liquid Neural Networks and Recurrent Neural Networks - arXiv, acessado em fevereiro 10, 2026, https://arxiv.org/html/2510.07578v1
+   6. Neural Circuit Policy (NCP) Overview - Emergent Mind, acessado em fevereiro 10, 2026, https://www.emergentmind.com/topics/neural-circuit-policy-ncp
+   7. Distribution of aboveground live biomass in the Amazon basin - NASA Biosphere, acessado em fevereiro 10, 2026, https://cce.nasa.gov/veg3dbiomass/saatchi-etal_GCB07.pdf
+   8. Amazon forest carbon dynamics predicted by profiles of canopy leaf area and light environment, acessado em fevereiro 10, 2026, https://data.fs.usda.gov/research/pubs/iitf/ja_iitf_2012_Stark001.pdf
+   9. Amazon islands as predator refugia: jaguar density and temporal activity in Maracá-Jipioca, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/357117481_Amazon_islands_as_predator_refugia_jaguar_density_and_temporal_activity_in_Maraca-Jipioca
+   10. (PDF) Above-and belowground biomass in a Brazilian Cerrado - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/228068778_Above-and_belowground_biomass_in_a_Brazilian_Cerrado
+   11. Biomass and mineralmass estimates in a “cerrado” ecosystem - SciELO, acessado em fevereiro 10, 2026, https://www.scielo.br/j/rbb/a/GMwD8qs9wKxwKLrhQH6FBsK/?lang=en&format=pdf
+   12. Health Benefits of the Alkaloids from Lobeira (Solanum lycocarpum St. Hill): A Comprehensive Review - PMC, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC11124789/
+   13. Physical, chemical and technological characteristics of Solanum lycocarpum A. St. - HILL (Solanaceae) fruit flour and starch, acessado em fevereiro 10, 2026, http://repositorio.ital.sp.gov.br/jspui/bitstream/123456789/612/1/Physical%2C%20chemical%20and%20technological%20characteristics....pdf
+   14. Modeling Herbaceous Biomass and Assessing Degradation Risk in the Caatinga Biome Using Monte Carlo Simulation - MDPI, acessado em fevereiro 10, 2026, https://www.mdpi.com/2071-1050/17/16/7267
+   15. Seasonal variation in net ecosystem CO2 exchange of a Brazilian seasonally dry tropical forest - PMC, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC7289890/
+   16. Ecology of Puma concolor (Carnivora: Felidae) in a Mexican tropical forest: adaptation to environmental disturbances - scielo.sa.cr, acessado em fevereiro 10, 2026, https://www.scielo.sa.cr/scielo.php?script=sci_arttext&pid=S0034-77442018000100078
+   17. The eye of the crepuscular rodent rock cavy (Kerodon rupestris) (Wied, 1820), acessado em fevereiro 10, 2026, https://d-nb.info/1181606667/34
+   18. Tapirus terrestris (Brazilian tapir) | INFORMATION | Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Tapirus_terrestris/
+   19. How Fast Is the Jaguar - Oreate AI Blog, acessado em fevereiro 10, 2026, https://www.oreateai.com/blog/how-fast-is-the-jaguar/de659f36928ceaaeb3f6337b389fc54d
+   20. Jaguar's top speed is really 80kmph ? Are there any verified / reliable studies to back up the information ? : r/natureismetal - Reddit, acessado em fevereiro 10, 2026, https://www.reddit.com/r/natureismetal/comments/15fga59/jaguars_top_speed_is_really_80kmph_are_there_any/
+   21. (PDF) A novel biomechanical approach for animal behaviour recognition using accelerometers - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/332177530_A_novel_biomechanical_approach_for_animal_behaviour_recognition_using_accelerometers
+   22. Sixty Degrees of Solutions: Field Techniques for Human–Jaguar Coexistence - MDPI, acessado em fevereiro 10, 2026, https://www.mdpi.com/2076-2615/15/9/1247
+   23. Time overlap analysis of activity patterns between jaguar (Panthera... - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/figure/Time-overlap-analysis-of-activity-patterns-between-jaguar-Panthera-onca-and-puma-Puma_fig2_352740670
+   24. Prey availability and temporal partitioning modulate felid coexistence in Neotropical forests, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC6413900/
+   25. THE NEOIROPICAL FELIDS:JAGUAR, OCELOT, MARGAY, AND JAGUARUNDI - Regulations.gov, acessado em fevereiro 10, 2026, https://downloads.regulations.gov/FWS-R2-ES-2021-0119-0002/attachment_6.pdf
+   26. Detection and avoidance of a carnivore odor by prey, acessado em fevereiro 10, 2026, http://datta.hms.harvard.edu/wp-content/uploads/2018/01/pub_19.pdf
+   27. Harpy Eagle - San Diego Zoo Animals & Plants, acessado em fevereiro 10, 2026, https://animals.sandiegozoo.org/animals/harpy-eagle
+   28. (PDF) The visual fields of the Harpy Eagle (Harpia harpyja) - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/370839169_The_visual_fields_of_the_Harpy_Eagle_Harpia_harpyja
+   29. Diet of the maned wolf, Chrysocyon brachyurus (Mammalia: Canidae), during wet and dry seasons at Ibitipoca State Park, Brazil | Request PDF - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/230083049_Diet_of_the_maned_wolf_Chrysocyon_brachyurus_Mammalia_Canidae_during_wet_and_dry_seasons_at_Ibitipoca_State_Park_Brazil
+   30. Chrysocyon brachyurus - Vertebrate Collection | UWSP - Stevens Point, acessado em fevereiro 10, 2026, https://www3.uwsp.edu/biology/VertebrateCollection/Pages/Vertebrates/Mammals%20of%20Paraguay/Chrysocyon%20brachyurus/Chrysocyon%20brachyurus.aspx
+   31. Digestive anatomy and diet of free-ranging maned wolf (Chrysocyon ..., acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC12287139/
+   32. HEMATOLOGY AND BLOOD CHEMISTRY PARAMETERS DIFFER IN FREE-RANGING MANED WOLVES (CHRYSOCYON BRACHYURUS) LIVING IN THE SERRA DA CAN, acessado em fevereiro 10, 2026, https://repository.si.edu/server/api/core/bitstreams/42cf1eba-95c8-4e8f-9cdb-858797a3bc84/content
+   33. The energetic cost of climbing in primates - PubMed - NIH, acessado em fevereiro 10, 2026, https://pubmed.ncbi.nlm.nih.gov/18487185/
+   34. Leopardus wiedii (margay) | INFORMATION - Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Leopardus_wiedii/
+   35. Margay (Leopardus wiedii) in the southernmost Atlantic Forest: Density and activity patterns under different levels of anthropogenic disturbance - PMC, acessado em fevereiro 10, 2026, https://pmc.ncbi.nlm.nih.gov/articles/PMC7202647/
+   36. Abundance changes and activity flexibility of the oncilla, Leopardus tigrinus (Carnivora: Felidae), appear to reflect avoidance of conflict - SciELO, acessado em fevereiro 10, 2026, https://www.scielo.br/j/zool/a/5JvJ4sQtDTyXzDJW8HnHr8n/?lang=en
+   37. Mesocarnivore activity patterns in the semiarid Caatinga: Limited by the harsh environment or affected by interspecific interactions? - CRIS UPC, acessado em fevereiro 10, 2026, https://cris.upc.edu.pe/en/publications/mesocarnivore-activity-patterns-in-the-semiarid-caatinga-limited--2/
+   38. Density, occupancy, and detectability of lowland tapirs, Tapirus terrestris, in Vale Natural Reserve, southeastern Brazil - Oxford Academic, acessado em fevereiro 10, 2026, https://academic.oup.com/jmammal/article/98/1/114/2977226
+   39. Lowland tapirs facilitate seed dispersal in degraded Amazonian forests - ResearchGate, acessado em fevereiro 10, 2026, https://www.researchgate.net/publication/331349698_Lowland_tapirs_facilitate_seed_dispersal_in_degraded_Amazonian_forests
+   40. Tapir | San Diego Zoo Animals & Plants, acessado em fevereiro 10, 2026, https://animals.sandiegozoo.org/animals/tapir
+   41. Assessing the Viability of Lowland Tapir Populations in a ..., acessado em fevereiro 10, 2026, https://www.ipe.org.br/docs/projetos/pantanal/premios/medici_phd_%202010.pdf
+   42. Tayassu pecari (white-lipped peccary) | INFORMATION - Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Tayassu_pecari/
+   43. White-lipped peccary - Wikipedia, acessado em fevereiro 10, 2026, https://en.wikipedia.org/wiki/White-lipped_peccary
+   44. What is a white-lipped peccary? Candid Animal Cam is in South America - Mongabay, acessado em fevereiro 10, 2026, https://news.mongabay.com/2020/12/what-is-a-white-lipped-peccary-candid-animal-cam-is-in-south-america/
+   45. White-lipped peccary (Tayassu pecari) - Detailed information - Ultimate Ungulate, acessado em fevereiro 10, 2026, https://ultimateungulate.com/Artiodactyla/Tayassu_pecariFull.html
+   46. Demography of the Brazil nut tree (Bertholletia excelsa) in the Bolivian Amazon: impact of seed extraction on - WUR eDepot, acessado em fevereiro 10, 2026, https://edepot.wur.nl/18689
+   47. Cuniculus paca (lowland paca) | INFORMATION - Animal Diversity Web, acessado em fevereiro 10, 2026, https://animaldiversity.org/accounts/Cuniculus_paca/
+   48. Cuniculus paca (Linnaeus 1766) - GBIF, acessado em fevereiro 10, 2026, https://www.gbif.org/species/195702454
+   49. Assessing anthropogenic impact on the habitat of threatened rock cavy (Kerodon rupestris) through its alarm calls | PLOS One - Research journals, acessado em fevereiro 10, 2026, https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0323711
+   50. Nutritional potential and bioactive compounds of xique‐xique juice: An unconventional food plant from Semiarid Brazilian, acessado em fevereiro 10, 2026, http://repositorio.ital.sp.gov.br/jspui/bitstream/123456789/458/1/Nutritional%20potential%20and%20bioactive....pdf
+   51. Artigo - Dialnet, acessado em fevereiro 10, 2026, https://dialnet.unirioja.es/descarga/articulo/6826437.pdf
+   52. Neural Circuit Architectural Priors for Embodied Control - NeurIPS, acessado em fevereiro 10, 2026, https://proceedings.neurips.cc/paper_files/paper/2022/file/52e431bd7689d98426300cb103bb0ee3-Paper-Conference.pdf
+   53. Closed-form Continuous-time Neural Networks arXiv:2106.13898v2 [cs.LG] 2 Mar 2022, acessado em fevereiro 10, 2026, https://arxiv.org/pdf/2106.13898
+   54. FedCFC: On-Device Personalized Federated Learning with Closed-Form Continuous-Time Neural Networks - GitHub Pages, acessado em fevereiro 10, 2026, https://tanrui.github.io/pub/FedCFC.pdf
+   55. JAX compatibility - AMD ROCm documentation, acessado em fevereiro 10, 2026, https://rocm.docs.amd.com/en/latest/compatibility/ml-compatibility/jax-compatibility.html
+   56. Building AI Agents with Persistent Memory: A Unified Database Approach | Tiger Data, acessado em fevereiro 10, 2026, https://www.tigerdata.com/learn/building-ai-agents-with-persistent-memory-a-unified-database-approach
+   57. Build persistent memory for agentic AI applications with Mem0 Open Source, Amazon ElastiCache for Valkey, and Amazon Neptune Analytics | AWS Database Blog, acessado em fevereiro 10, 2026, https://aws.amazon.com/blogs/database/build-persistent-memory-for-agentic-ai-applications-with-mem0-open-source-amazon-elasticache-for-valkey-and-amazon-neptune-analytics/
+   58. Top AI Agent Orchestration Platforms in 2026 - Redis, acessado em fevereiro 10, 2026, https://redis.io/blog/ai-agent-orchestration-platforms/

@@ -40,10 +40,13 @@ class SimulationExporter:
         energies: Any,
         ages: Any,
         is_active: Any,
+        species_ids: Any,  # [NEW]
+        masses: Any,       # [NEW]
         food_grid: Any,
         metrics: dict,
         generation: int = 0,
         generation_stats: dict | None = None,
+        world_bounds: float = 500.0,
     ) -> None:
         """Exporta o estado de um step para JSON."""
         # Converter JAX arrays para listas Python
@@ -55,6 +58,8 @@ class SimulationExporter:
         pos_np = jnp.array(positions)
         energy_np = jnp.array(energies)
         age_np = jnp.array(ages)
+        species_np = jnp.array(species_ids)
+        mass_np = jnp.array(masses)
 
         for i in range(len(active_mask)):
             if active_mask[i]:
@@ -64,6 +69,8 @@ class SimulationExporter:
                     "y": float(pos_np[i, 1]),
                     "energy": float(energy_np[i]),
                     "age": int(age_np[i]),
+                    "sp": int(species_np[i]),  # species_id
+                    "m": float(mass_np[i]),    # mass
                 })
 
         # Food grid (downsample para performance)
@@ -101,7 +108,7 @@ class SimulationExporter:
             "metrics": step_metrics,
             "history": self.history[-200:],  # Últimos 200 pontos
             "generation_history": self.generation_history,
-            "world_bounds": 50.0,
+            "world_bounds": world_bounds,
             "status": "running",
         }
 

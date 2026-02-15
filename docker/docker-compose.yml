@@ -20,7 +20,8 @@ services:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
     volumes:
-      - ..:/app
+      - ../backend:/app
+      - ../frontend/dist:/frontend_dist
     environment:
       - HSA_OVERRIDE_GFX_VERSION=10.3.0
       - XLA_PYTHON_CLIENT_MEM_FRACTION=0.85

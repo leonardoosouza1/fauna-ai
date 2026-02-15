@@ -148,7 +148,7 @@ class BiomeConfig(NamedTuple):
 
 def compute_bmr(mass_kg: float, alpha: float = 3.5) -> float:
     """TMB via Lei de Kleiber: BMR = α × M^0.75 (Watts)."""
-    return alpha * (mass_kg ** 0.75)
+    return alpha * (mass_kg ** 0.75) * 0.1  # [TWEAK] Reduzido para 10% do real para estabilidade inicial
 
 
 def compute_cot(mass_kg: float) -> float:
@@ -163,7 +163,7 @@ def compute_visual_range(mass_kg: float) -> float:
 
 def compute_max_energy(mass_kg: float) -> float:
     """Capacidade energética: E_max = 500 × M^0.75 kJ."""
-    return 500.0 * (mass_kg ** 0.75)
+    return 500.0 * (mass_kg ** 0.75) * 2.0  # [TWEAK] Dobro de bateria para aguentar mais tempo sem comer
 
 
 # ══════════════════════════════════════════════
@@ -434,8 +434,8 @@ PAMPA_MATA_ATLANTICA = BiomeConfig(
     mean_temperature_c=18.0,
     temperature_amplitude_c=10.0,
     annual_rainfall_mm=1500.0,
-    anpp_kg_m2_year=0.53,
-    max_standing_biomass_kg_m2=0.6,
+    anpp_kg_m2_year=0.53 * 10.0,          # [TWEAK] 10x mais comida crescendo
+    max_standing_biomass_kg_m2=0.6 * 5.0, # [TWEAK] 5x mais estoque de comida
     has_c4_grasses=True,
     has_c3_grasses=True,
     forest_cover_fraction=0.25,

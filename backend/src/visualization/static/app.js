@@ -165,148 +165,203 @@ function worldToCanvas(x, y, bounds) {
     };
 }
 
-function energyToColor(energy) {
-    if (energy > 120) return '#10b981'; // green
-    if (energy > 80) return '#22d3ee';  // cyan
-    if (energy > 40) return '#f59e0b';  // amber
-    if (energy > 15) return '#f97316';  // orange
-    return '#f43f5e';                    // rose
+// ============================================
+// Species Config
+// ============================================
+const SPECIES_COLORS = {
+    1: '#10b981', // Preá (Green)
+    2: '#3b82f6', // Veado (Blue)
+    3: '#78350f', // Capivara (Brown)
+    4: '#f97316', // Graxaim (Orange)
+    5: '#eab308', // Jaguatirica (Yellow)
+    6: '#ef4444', // Puma (Red)
+};
+
+function getAgentColor(agent) {
+    // Se sp (species_id) existe, usa cor da espécie
+    if (agent.sp && SPECIES_COLORS[agent.sp]) {
+        return SPECIES_COLORS[agent.sp];
+    }
+    // Fallback para energia se não tiver sp (retrocompatibilidade)
+    return energyToColorLegacy(agent.energy);
 }
 
-function energyToRadius(energy) {
-    return Math.max(3, Math.min(8, energy / 20));
+function energyToColorLegacy(energy) {
+  if (energy > 120) return "#10b981";
+  if (energy > 80) return "#22d3ee";
+  if (energy > 40) return "#f59e0b";
+  if (energy > 15) return "#f97316";
+  return "#f43f5e";
+}
+
+function getAgentRadius(agent) {
+  // Se tiver massa (m), escala com log da massa
+  if (agent.m) {
+    // Base 3px + log(m)*2. Ex: 0.5kg->~2px, 50kg->~10px
+    return Math.max(3, 3 + Math.log(agent.m + 1) * 2);
+  }
+  return Math.max(3, Math.min(8, agent.energy / 20));
 }
 
 function renderWorld() {
-    if (!state) return;
+  if (!state) return;
 
-    const bounds = state.world_bounds || 50;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Ajusta bounds para 500m se new exporter, ou 50 legado
+  const bounds = state.world_bounds || 500.0;
 
-    // Background
-    const grad = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, canvas.width / 2,
-    );
-    grad.addColorStop(0, '#0c1120');
-    grad.addColorStop(1, '#050810');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Auto-scaling se bounds mudou muito
+  // (Opcional, mas worldToCanvas já usa bounds)
 
-    // Grid lines
-    ctx.strokeStyle = 'rgba(75, 85, 99, 0.1)';
-    ctx.lineWidth = 0.5;
-    const gridStep = canvas.width / 10;
-    for (let i = 0; i <= 10; i++) {
-        const pos = i * gridStep;
-        ctx.beginPath();
-        ctx.moveTo(pos, 0);
-        ctx.lineTo(pos, canvas.height);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, pos);
-        ctx.lineTo(canvas.width, pos);
-        ctx.stroke();
-    }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Food grid
-    if (showFood.checked && state.food_grid) {
-        const grid = state.food_grid;
-        const rows = grid.length;
-        const cols = grid[0] ? grid[0].length : 0;
-        const cellW = canvas.width / cols;
-        const cellH = canvas.height / rows;
+  // Background
+  const grad = ctx.createRadialGradient(
+    canvas.width / 2,
+    canvas.height / 2,
+    0,
+    canvas.width / 2,
+    canvas.height / 2,
+    canvas.width / 2,
+  );
+  grad.addColorStop(0, "#0c1120");
+  grad.addColorStop(1, "#050810");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const val = grid[r][c];
-                if (val > 0.1) {
-                    const alpha = Math.min(0.5, val / 10);
-                    ctx.fillStyle = `rgba(34, 211, 238, ${alpha})`;
-                    ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
-                }
-            }
+  // Grid lines (ajustado para visual clean em mapa grande)
+  ctx.strokeStyle = "rgba(75, 85, 99, 0.1)";
+  ctx.lineWidth = 0.5;
+  const gridStep = canvas.width / 10;
+  for (let i = 0; i <= 10; i++) {
+    const pos = i * gridStep;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(canvas.width, pos);
+    ctx.stroke();
+  }
+
+  // Food grid / Vegetation
+  // Se tiver dados de biomassa, desenhar (food_grid vira proxy visual)
+  if (showFood.checked && state.food_grid) {
+    const grid = state.food_grid;
+    const rows = grid.length;
+    const cols = grid[0] ? grid[0].length : 0;
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const val = grid[r][c];
+        if (val > 0.1) {
+          // Verde para vegetação
+          const alpha = Math.min(0.4, val / 5.0);
+          ctx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+          ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
         }
+      }
     }
+  }
 
-    // Trails
-    if (showTrails.checked && trails.length > 1) {
-        ctx.globalAlpha = 0.3;
-        for (const trail of trails) {
-            if (trail.length < 2) continue;
-            ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            const first = worldToCanvas(trail[0].x, trail[0].y, bounds);
-            ctx.moveTo(first.cx, first.cy);
-            for (let i = 1; i < trail.length; i++) {
-                const p = worldToCanvas(trail[i].x, trail[i].y, bounds);
-                ctx.lineTo(p.cx, p.cy);
-            }
-            ctx.stroke();
-        }
-        ctx.globalAlpha = 1.0;
+  // Trails
+  if (showTrails.checked && trails.length > 1) {
+    ctx.globalAlpha = 0.3;
+    for (const trail of trails) {
+      if (trail.length < 2) continue;
+      ctx.strokeStyle = "rgba(99, 102, 241, 0.3)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const first = worldToCanvas(trail[0].x, trail[0].y, bounds);
+      ctx.moveTo(first.cx, first.cy);
+      for (let i = 1; i < trail.length; i++) {
+        const p = worldToCanvas(trail[i].x, trail[i].y, bounds);
+        ctx.lineTo(p.cx, p.cy);
+      }
+      ctx.stroke();
     }
+    ctx.globalAlpha = 1.0;
+  }
 
-    // Agents
-    if (state.agents) {
-        for (const agent of state.agents) {
-            const { cx, cy } = worldToCanvas(agent.x, agent.y, bounds);
-            const color = energyToColor(agent.energy);
-            const radius = energyToRadius(agent.energy);
+  // Agents
+  if (state.agents) {
+    for (const agent of state.agents) {
+      const { cx, cy } = worldToCanvas(agent.x, agent.y, bounds);
+      const color = getAgentColor(agent);
+      const radius = getAgentRadius(agent);
 
-            // Glow
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
-            ctx.fillStyle = color.replace(')', ', 0.15)').replace('rgb', 'rgba');
-            ctx.fill();
+      // Glow indicator de energia/vida
+      const energyAlpha = Math.min(0.5, agent.energy / 100.0);
 
-            // Body
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + 2, 0, Math.PI * 2);
+      ctx.fillStyle = color.replace("#", "rgba(") + hexToRgb(color) + `, 0.2)`;
+      // Hack simples para cor, melhor usar func dedicada se hex
+      // Usando shadow blur para glow real
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = color;
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.shadowBlur = 0;
 
-            // Inner dot
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.fill();
-        }
+      // Body
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
     }
+  }
 
-    // World border
-    ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+  // World border
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.3)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+}
+
+// Helper para converter hex para "rrr, ggg, bbb" (aproximado)
+function hexToRgb(hex) {
+    // Remove #
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0,2), 16);
+    const g = parseInt(hex.substring(2,4), 16);
+    const b = parseInt(hex.substring(4,6), 16);
+    return `${r}, ${g}, ${b}`;
 }
 
 // ============================================
 // Update UI
 // ============================================
 function updateStats() {
-    if (!state || !state.metrics) return;
-    const m = state.metrics;
+  if (!state || !state.metrics) return;
+  const m = state.metrics;
 
-    elStep.textContent = `Step ${m.step}`;
-    elAlive.textContent = m.alive;
-    elEnergy.textContent = (m.mean_energy || 0).toFixed(1);
-    elAge.textContent = Math.round(m.mean_age || 0);
-    elFood.textContent = Math.round(m.food_total || 0);
-    elGeneration.textContent = m.generation || 0;
+  elStep.textContent = `Step ${m.step}`;
+  // Show total alive + breakdown
+  let popText = m.alive;
+  if (m.prea_pop !== undefined) {
+    popText += ` (P:${m.prea_pop} V:${m.veado_pop} Pred:${m.predator_pop})`;
+  }
+  elAlive.textContent = popText;
+  elEnergy.textContent = (m.mean_energy || 0).toFixed(1);
+  elAge.textContent = Math.round(m.mean_age || 0);
+  elFood.textContent = Math.round(m.food_total || 0);
+  elGeneration.textContent = m.generation || 0;
 
-    // Fitness from generation history
-    if (state.generation_history && state.generation_history.length > 0) {
-        const latest = state.generation_history[state.generation_history.length - 1];
-        elFitness.textContent = (latest.max_fitness || 0).toFixed(2);
-    }
+  // Fitness from generation history
+  if (state.generation_history && state.generation_history.length > 0) {
+    const latest =
+      state.generation_history[state.generation_history.length - 1];
+    elFitness.textContent = (latest.max_fitness || 0).toFixed(2);
+  }
 
-    // Timer
-    if (state.elapsed != null) {
-        const mins = Math.floor(state.elapsed / 60);
-        const secs = Math.floor(state.elapsed % 60);
-        elTimer.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
+  // Timer
+  if (state.elapsed != null) {
+    const mins = Math.floor(state.elapsed / 60);
+    const secs = Math.floor(state.elapsed % 60);
+    elTimer.textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
 }
 
 function updateStatus(status) {
